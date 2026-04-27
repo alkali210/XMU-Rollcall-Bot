@@ -1,7 +1,11 @@
 import uuid
 import time
 import math
+import builtins
+import logging
 import requests
+
+logger = logging.getLogger(__name__)
 
 base_url = "https://lnt.xmu.edu.cn"
 headers = {
@@ -14,6 +18,14 @@ headers = {
     "Accept-Language": "zh-CN,zh;q=0.9",
     "Referer": "https://ids.xmu.edu.cn/authserver/login",
 }
+
+
+def log_and_print(*args, **kwargs):
+    builtins.print(*args, **kwargs)
+    sep = kwargs.get("sep", " ")
+    message = sep.join(str(arg) for arg in args).strip()
+    if message:
+        logger.info(message)
 
 def find_number_code(data, depth=0, max_depth=10):
     """Extract number_code from nested dict/list API responses.
@@ -44,6 +56,7 @@ def find_number_code(data, depth=0, max_depth=10):
     return None
 
 def send_code(in_session, rollcall_id):
+    print = log_and_print
     code_url = f"{base_url}/api/rollcall/{rollcall_id}/student_rollcalls"
     answer_url = f"{base_url}/api/rollcall/{rollcall_id}/answer_number_rollcall"
     print("Trying number code from API...")
@@ -92,6 +105,7 @@ def send_code(in_session, rollcall_id):
         return False
 
 def send_radar(in_session, rollcall_id):
+    print = log_and_print
     url = f"{base_url}/api/rollcall/{rollcall_id}/answer"
 
     lat_1, lat_2 = 24.3, 24.6

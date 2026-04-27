@@ -1,5 +1,17 @@
 import time
+import builtins
+import logging
 from .verify import send_code, send_radar
+
+logger = logging.getLogger(__name__)
+
+
+def log_and_print(*args, **kwargs):
+    builtins.print(*args, **kwargs)
+    sep = kwargs.get("sep", " ")
+    message = sep.join(str(arg) for arg in args).strip()
+    if message:
+        logger.info(message)
 
 def process_rollcalls(data, session):
     """处理签到数据"""
@@ -35,6 +47,7 @@ def extract_rollcalls(data):
 
 def handle_rollcalls(data, session):
     """处理签到流程"""
+    print = log_and_print
     count, rollcalls = extract_rollcalls(data)
     answer_status = [False for _ in range(count)]
 
@@ -70,4 +83,3 @@ def handle_rollcalls(data, session):
                 print("Answering failed. QRcode rollcall not supported yet.")
 
     return answer_status
-

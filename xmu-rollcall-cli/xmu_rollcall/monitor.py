@@ -4,14 +4,18 @@ import sys
 import requests
 import shutil
 import re
+import logging
 from xmulogin import xmulogin
 from . import __version__
+from .logging_config import setup_logging, strip_ansi
 from .utils import clear_screen, save_session, load_session, verify_session
 from .rollcall_handler import process_rollcalls
 from .config import get_cookies_path
 
+logger = logging.getLogger(__name__)
+
 base_url = "https://lnt.xmu.edu.cn"
-interval = 1
+interval = 10
 headers = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -53,12 +57,6 @@ def get_terminal_width():
         return shutil.get_terminal_size().columns
     except:
         return 80
-
-_ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-
-def strip_ansi(text):
-    """移除ANSI颜色代码以计算实际文本长度"""
-    return _ANSI_ESCAPE.sub('', text)
 
 def center_text(text, width=None):
     """居中文本"""
@@ -163,8 +161,10 @@ def print_login_status(message, is_success=True):
     """打印登录状态"""
     if is_success:
         print(f"{Colors.OKGREEN}[SUCCESS]{Colors.ENDC} {message}")
+        logger.info(f"[SUCCESS] {message}")
     else:
         print(f"{Colors.FAIL}[FAILED]{Colors.ENDC} {message}")
+        logger.error(f"[FAILED] {message}")
 
 TIME_LINE = 10
 RUNTIME_LINE = 11
@@ -203,6 +203,7 @@ def update_footer_text():
 
 def start_monitor(account):
     """启动监控程序"""
+    log_file = setup_logging()
     USERNAME = account['username']
     PASSWORD = account['password']
     ACCOUNT_ID = account.get('id', 1)
@@ -216,6 +217,8 @@ def start_monitor(account):
     cookies_path = get_cookies_path(ACCOUNT_ID)
     rollcalls_url = f"{base_url}/api/radar/rollcalls"
     session = None
+    logger.info("Starting monitor for account id=%s name=%s", ACCOUNT_ID, ACCOUNT_NAME or USERNAME)
+    logger.info("Log file: %s", log_file)
 
     # 初始化
     clear_screen()
@@ -267,7 +270,7 @@ def start_monitor(account):
     print_dashboard(ACCOUNT_NAME, start_time, query_count, 0, show_banner=False)
 
     footer_initialized = False
-    _last_query_time = 0
+    _last_query_time = -interval
 
     try:
         while True:
@@ -284,21 +287,23 @@ def start_monitor(account):
                     update_footer_text()
 
                 elapsed = int(current_time - start_time)
-                if elapsed > _last_query_time:
+                local_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+                running_time = format_time(elapsed)
+
+                update_status_line(TIME_LINE, "Current Time:", local_time, Colors.OKCYAN)
+                update_status_line(RUNTIME_LINE, "Running Time:", running_time, Colors.OKGREEN)
+                
+                if elapsed > _last_query_time + interval - 1:
                     _last_query_time = elapsed
                     data = session.get(rollcalls_url, headers=headers).json()
                     query_count += 1
 
-                    local_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-                    running_time = format_time(elapsed)
-
-                    update_status_line(TIME_LINE, "Current Time:", local_time, Colors.OKCYAN)
-                    update_status_line(RUNTIME_LINE, "Running Time:", running_time, Colors.OKGREEN)
                     update_status_line(QUERY_LINE, "Query Count: ", str(query_count), Colors.WARNING)
 
                     if temp_data != data:
                         temp_data = data
                         if len(temp_data['rollcalls']) > 0:
+                            logger.info("New rollcall detected: count=%s", len(temp_data['rollcalls']))
                             clear_screen()
                             width = get_terminal_width()
                             print(f"\n{Colors.WARNING}{Colors.BOLD}{'!' * width}{Colors.ENDC}")
@@ -315,11 +320,17 @@ def start_monitor(account):
             except KeyboardInterrupt:
                 raise
             except Exception as e:
+                logger.exception("Monitor exited because of an error")
                 clear_screen()
                 print(f"\n{center_text(f'{Colors.FAIL}{Colors.BOLD}Error occurred:{Colors.ENDC} {str(e)}')}")
                 print(f"{center_text(f'{Colors.GRAY}Exiting...{Colors.ENDC}')}\n")
                 sys.exit(1)
     except KeyboardInterrupt:
+        logger.info(
+            "Monitor stopped by user. queries=%s running_time=%s",
+            query_count,
+            format_time(int(time.time() - start_time)),
+        )
         clear_screen()
         print(f"\n{center_text(f'{Colors.WARNING}Shutting down gracefully...{Colors.ENDC}')}")
         print(f"{center_text(f'{Colors.GRAY}Total queries performed: {query_count}{Colors.ENDC}')}")

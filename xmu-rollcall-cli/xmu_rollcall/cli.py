@@ -1,4 +1,5 @@
 import click
+import logging
 import sys
 from xmulogin import xmulogin
 from . import __version__
@@ -7,7 +8,10 @@ from .config import (
     add_account, get_all_accounts, get_current_account, set_current_account,
     get_account_by_id, CONFIG_FILE, delete_account, perform_account_deletion
 )
+from .logging_config import setup_logging
 from .monitor import start_monitor, base_url, headers
+
+logger = logging.getLogger(__name__)
 
 # ANSI Color codes
 class Colors:
@@ -24,6 +28,11 @@ class Colors:
 @click.group(invoke_without_command=True)
 @click.pass_context
 def cli(ctx):
+    log_file = setup_logging()
+    ctx.ensure_object(dict)
+    ctx.obj["log_file"] = log_file
+    command_name = ctx.invoked_subcommand or "help"
+    logger.info("CLI invoked: %s", command_name)
     if ctx.invoked_subcommand is None:
         click.echo(f"{Colors.OKCYAN}{Colors.BOLD}XMU Rollcall Bot CLI v{__version__}{Colors.ENDC}")
         click.echo(f"\nUsage:")
@@ -66,6 +75,7 @@ def config():
         try:
             session = xmulogin(type=3, username=username, password=password)
             if session:
+                logger.info("Credential validation succeeded for username=%s", username)
                 click.echo(f"{Colors.OKGREEN}✓ Login successful!{Colors.ENDC}")
 
                 # 获取用户姓名
@@ -183,6 +193,7 @@ def config():
 def start():
     """启动签到监控"""
     # 加载配置
+    logger.info("Start command selected")
     config_data = load_config()
 
     # 检查配置是否完整
@@ -194,14 +205,17 @@ def start():
     # 获取当前账号
     current_account = get_current_account(config_data)
     click.echo(f"{Colors.OKCYAN}Using account: {current_account.get('name') or current_account.get('username')} (ID: {current_account.get('id')}){Colors.ENDC}")
+    logger.info("Using account id=%s name=%s", current_account.get('id'), current_account.get('name') or current_account.get('username'))
 
     # 启动监控
     try:
         start_monitor(current_account)
     except KeyboardInterrupt:
+        logger.info("Start command interrupted by user")
         click.echo(f"\n{Colors.WARNING}Shutting down...{Colors.ENDC}")
         sys.exit(0)
     except Exception as e:
+        logger.exception("Start command failed")
         click.echo(f"\n{Colors.FAIL}Error: {str(e)}{Colors.ENDC}")
         sys.exit(1)
 
