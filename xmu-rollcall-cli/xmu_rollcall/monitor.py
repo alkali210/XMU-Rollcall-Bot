@@ -3,19 +3,20 @@ import os
 import sys
 import requests
 import shutil
-import re
 import logging
 from xmulogin import xmulogin
 from . import __version__
 from .logging_config import setup_logging, strip_ansi
 from .utils import clear_screen, save_session, load_session, verify_session
 from .rollcall_handler import process_rollcalls
-from .config import get_cookies_path
+from .config import get_cookies_path, load_config
 
 logger = logging.getLogger(__name__)
 
 base_url = "https://lnt.xmu.edu.cn"
-interval = 10
+DEFAULT_INTERVAL = 10
+DEFAULT_DELAY = 10
+interval = DEFAULT_INTERVAL
 headers = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -50,6 +51,26 @@ CYAN_TEXT = f"{Colors.OKCYAN}"
 GREEN_TEXT = f"{Colors.OKGREEN}"
 YELLOW_TEXT = f"{Colors.WARNING}"
 END = Colors.ENDC
+
+def _coerce_number(value, default):
+    if value is None or isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        return value
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+def _load_monitor_settings():
+    """从配置文件中加载：interval为轮询间隔；delay为尝试签到之前的等待时间，设置为false则不等待"""
+    config = load_config()
+    interval_value = _coerce_number(config.get("interval"), DEFAULT_INTERVAL)
+    delay_value = config.get("delay", DEFAULT_DELAY)
+    if delay_value is False:
+        return interval_value, False
+    delay_value = _coerce_number(delay_value, DEFAULT_DELAY)
+    return interval_value, delay_value
 
 def get_terminal_width():
     """获取终端宽度"""
@@ -164,7 +185,7 @@ def print_login_status(message, is_success=True):
         logger.info(f"[SUCCESS] {message}")
     else:
         print(f"{Colors.FAIL}[FAILED]{Colors.ENDC} {message}")
-        logger.error(f"[FAILED] {message}")
+        logger.warning(f"[FAILED] {message}")
 
 TIME_LINE = 10
 RUNTIME_LINE = 11
@@ -204,6 +225,8 @@ def update_footer_text():
 def start_monitor(account):
     """启动监控程序"""
     log_file = setup_logging()
+    global interval
+    interval, delay_seconds = _load_monitor_settings()
     USERNAME = account['username']
     PASSWORD = account['password']
     ACCOUNT_ID = account.get('id', 1)
@@ -256,7 +279,7 @@ def start_monitor(account):
     print(f"{Colors.OKCYAN}[Step 3/3]{Colors.ENDC} Fetching user profile...")
     # profile = session.get(f"{base_url}/api/profile", headers=headers).json()
     # name = profile["name"]
-    print_login_status(f"Welcome, {ACCOUNT_NAME}", True)
+    print(f"Welcome, {ACCOUNT_NAME}", True)
 
     print(f"\n{Colors.OKGREEN}{Colors.BOLD}Initialization complete{Colors.ENDC}")
     print(f"\n{Colors.GRAY}Starting monitor in 3 seconds...{Colors.ENDC}")
@@ -270,7 +293,7 @@ def start_monitor(account):
     print_dashboard(ACCOUNT_NAME, start_time, query_count, 0, show_banner=False)
 
     footer_initialized = False
-    _last_query_time = -interval
+    _last_query_time = -interval # 进入循环时立即查询一次
 
     try:
         while True:
@@ -309,6 +332,24 @@ def start_monitor(account):
                             print(f"\n{Colors.WARNING}{Colors.BOLD}{'!' * width}{Colors.ENDC}")
                             print(center_text(f"{Colors.WARNING}{Colors.BOLD}NEW ROLLCALL DETECTED{Colors.ENDC}"))
                             print(f"{Colors.WARNING}{Colors.BOLD}{'!' * width}{Colors.ENDC}\n")
+                            
+                            should_delay = any(
+                                rollcall.get('is_radar') or rollcall.get('is_number')
+                                for rollcall in temp_data.get('rollcalls', [])
+                            )
+                            if should_delay and delay_seconds is not False:
+                                logger.info(
+                                    "Waiting %s seconds before attempting rollcall...",
+                                    delay_seconds,
+                                )
+                                print(
+                                    f"{Colors.GRAY}Waiting {delay_seconds} seconds before attempting rollcall...{Colors.ENDC}"
+                                )
+                                try:
+                                    time.sleep(delay_seconds)
+                                except KeyboardInterrupt:
+                                    raise
+                                
                             temp_data = process_rollcalls(temp_data, session)
                             print_separator("=")
                             print(f"\n{center_text(f'{Colors.GRAY}Press Ctrl+C to exit, continuing monitor...{Colors.ENDC}')}\n")
@@ -320,7 +361,7 @@ def start_monitor(account):
             except KeyboardInterrupt:
                 raise
             except Exception as e:
-                logger.exception("Monitor exited because of an error")
+                logger.exception("Monitor exited because of an error: %s", str(e))
                 clear_screen()
                 print(f"\n{center_text(f'{Colors.FAIL}{Colors.BOLD}Error occurred:{Colors.ENDC} {str(e)}')}")
                 print(f"{center_text(f'{Colors.GRAY}Exiting...{Colors.ENDC}')}\n")

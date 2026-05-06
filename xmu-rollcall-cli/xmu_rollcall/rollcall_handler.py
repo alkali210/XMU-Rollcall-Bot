@@ -5,7 +5,6 @@ from .verify import send_code, send_radar
 
 logger = logging.getLogger(__name__)
 
-
 def log_and_print(*args, **kwargs):
     builtins.print(*args, **kwargs)
     sep = kwargs.get("sep", " ")

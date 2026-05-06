@@ -6,17 +6,10 @@
 
 </div>
 
-<div align="center">
-
-  <img src="https://img.shields.io/github/directory-file-count/KrsMt-0113/XMU-Rollcall-Bot" />
-  <img src="https://img.shields.io/github/languages/code-size/KrsMt-0113/XMU-Rollcall-Bot" />
-
-</div>
-
 ## Install
 
 ```bash
-pip install xmu-rollcall-cli
+pip install -e xmu-rollcall-cli
 ```
 
 ## Usage
@@ -25,6 +18,18 @@ pip install xmu-rollcall-cli
 xmu config  # configure your account. support multiple accounts.
 xmu switch  # switch between accounts.
 xmu start   # start the monitor.
+```
+See log at `CONFIG_DIR/xmu_rollcall.log`
+
+### Configuration
+Default configuration file path: `$env:XMU_ROLLCALL_CONFIG_DIR` > `~/.xmu_rollcall/config.json` > `./config.json`
+
+You can set the interval and the wait time before attempting rollcall *(default: 10s)*:
+```json
+{
+  "interval": 8,
+  "delay": 12 // or false to disable the wait time
+}
 ```
 
 ## Other
