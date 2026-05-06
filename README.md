@@ -25,7 +25,7 @@ See log at `CONFIG_DIR/xmu_rollcall.log`
 Default configuration file path: `$env:XMU_ROLLCALL_CONFIG_DIR` > `~/.xmu_rollcall/config.json` > `./config.json`
 
 You can set the interval and the wait time before attempting rollcall *(default: 10s)*:
-```json
+```jsonc
 {
   "interval": 8,
   "delay": 12 // or false to disable the wait time
