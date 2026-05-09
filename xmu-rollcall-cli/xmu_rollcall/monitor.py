@@ -279,7 +279,7 @@ def start_monitor(account):
     print(f"{Colors.OKCYAN}[Step 3/3]{Colors.ENDC} Fetching user profile...")
     # profile = session.get(f"{base_url}/api/profile", headers=headers).json()
     # name = profile["name"]
-    print(f"Welcome, {ACCOUNT_NAME}", True)
+    print(f"Welcome, {ACCOUNT_NAME}")
 
     print(f"\n{Colors.OKGREEN}{Colors.BOLD}Initialization complete{Colors.ENDC}")
     print(f"\n{Colors.GRAY}Starting monitor in 3 seconds...{Colors.ENDC}")

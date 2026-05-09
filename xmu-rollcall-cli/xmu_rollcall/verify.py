@@ -27,71 +27,113 @@ def log_and_print(*args, **kwargs):
     if message:
         logger.info(message)
 
-def find_number_code(data, depth=0, max_depth=10):
-    """Extract number_code from nested dict/list API responses.
+def _api_headers(in_session=None):
+    """Build JSON API headers while preserving cookies/auth from the session."""
+    session_headers = getattr(in_session, "headers", {}) or {}
+    return {
+        **headers,
+        **session_headers,
+        "Accept": "application/json, text/plain, */*",
+        "Referer": f"{base_url}/",
+    }
+
+def find_key(data, key, depth=0, max_depth=10):
+    """Extract the first value for key from nested dict/list API responses.
 
     Args:
         data: Parsed JSON payload from Tronclass APIs.
+        key: Field name to find.
         depth: Current recursive depth when traversing nested structures.
         max_depth: Maximum depth allowed for traversal to avoid pathological recursion.
 
     Returns:
-        str or None: The first discovered number_code value, or None if not found.
+        object or None: The first discovered value, or None if not found.
     """
     if depth > max_depth:
         return None
     if isinstance(data, dict):
-        number_code = data.get("number_code")
-        if number_code is not None:
-            return str(number_code)
+        value = data.get(key)
+        if value is not None:
+            return value
         for value in data.values():
-            nested_code = find_number_code(value, depth + 1, max_depth)
-            if nested_code:
-                return nested_code
+            nested_value = find_key(value, key, depth + 1, max_depth)
+            if nested_value is not None:
+                return nested_value
     elif isinstance(data, list):
         for item in data:
-            nested_code = find_number_code(item, depth + 1, max_depth)
-            if nested_code:
-                return nested_code
+            nested_value = find_key(item, key, depth + 1, max_depth)
+            if nested_value is not None:
+                return nested_value
     return None
+
+def find_number_code(data, depth=0, max_depth=10):
+    """Extract number_code from nested dict/list API responses."""
+    number_code = find_key(data, "number_code", depth, max_depth)
+    if number_code is None:
+        return None
+    return str(number_code)
+
+def get_number_rollcall_info(in_session, rollcall_id):
+    """Fetch number rollcall details directly from Tronclass API.
+
+    This mirrors the working approach in ``xmu_rollcall_zako_Tronclass``:
+    ``GET /api/rollcall/{rollcall_id}/student_rollcalls`` exposes the
+    ``number_code`` used by numeric rollcalls.  The response shape has changed
+    across Tronclass versions, so values are searched recursively.
+
+    Returns:
+        tuple: (number_code, status, end_time, error_message)
+    """
+    code_url = f"{base_url}/api/rollcall/{rollcall_id}/student_rollcalls"
+    request_headers = _api_headers(in_session)
+    try:
+        code_response = in_session.get(code_url, headers=request_headers)
+    except requests.RequestException as e:
+        return None, None, None, f"Failed to request number code API: {e}"
+
+    if code_response.status_code != 200:
+        return None, None, None, f"Failed to get number code. Status: {code_response.status_code}"
+
+    try:
+        code_data = code_response.json()
+    except ValueError as e:
+        return None, None, None, f"Failed to parse number code API response: {e}"
+
+    number_code = find_number_code(code_data)
+    status = find_key(code_data, "status")
+    end_time = find_key(code_data, "end_time")
+    if not number_code:
+        return None, status, end_time, "Failed to get number code. 'number_code' not found in API response."
+    return number_code, status, end_time, None
 
 def send_code(in_session, rollcall_id):
     print = log_and_print
-    code_url = f"{base_url}/api/rollcall/{rollcall_id}/student_rollcalls"
     answer_url = f"{base_url}/api/rollcall/{rollcall_id}/answer_number_rollcall"
     print("Trying number code from API...")
     t00 = time.time()
-    request_headers = in_session.headers
-    try:
-        code_response = in_session.get(code_url, headers=request_headers)
-        if code_response.status_code != 200:
-            t01 = time.time()
-            print(f"Failed to get number code. Status: {code_response.status_code}\nTime: {t01 - t00:.2f} s.")
-            return False
-        code_data = code_response.json()
-    except requests.RequestException as e:
-        t01 = time.time()
-        print(f"Failed to request number code API: {e}\nTime: {t01 - t00:.2f} s.")
-        return False
-    except ValueError as e:
-        t01 = time.time()
-        print(f"Failed to parse number code API response: {e}\nTime: {t01 - t00:.2f} s.")
-        return False
 
-    number_code = find_number_code(code_data)
-    if not number_code:
+    number_code, status, end_time, error = get_number_rollcall_info(in_session, rollcall_id)
+    if error:
         t01 = time.time()
-        print(f"Failed to get number code. 'number_code' not found in API response.\nTime: {t01 - t00:.2f} s.")
+        print(f"{error}\nTime: {t01 - t00:.2f} s.")
         return False
 
     payload = {
         "deviceId": str(uuid.uuid4()),
         "numberCode": number_code
     }
+    request_headers = _api_headers(in_session)
     try:
         response = in_session.put(answer_url, json=payload, headers=request_headers)
         if response.status_code == 200:
             print("Number code rollcall answered successfully.\nNumber code: ", number_code)
+            if status or end_time:
+                logger.info(
+                    "Number rollcall API info: rollcall_id=%s status=%s end_time=%s",
+                    rollcall_id,
+                    status,
+                    end_time,
+                )
             time.sleep(5)
             t01 = time.time()
             print(f"Time: {t01 - t00:.2f} s.")
