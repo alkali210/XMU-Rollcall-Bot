@@ -47,9 +47,7 @@ Issues = "https://github.com/KrsMt-0113/XMU-Rollcall-Bot/issues"
 Documentation = "https://github.com/KrsMt-0113/XMU-Rollcall-Bot/blob/main/README.md"
 
 [project.scripts]
-XMUrollcall-cli = "xmu_rollcall.cli:cli"
-xmu-rollcall-cli = "xmu_rollcall.cli:cli"
-xmu = "xmu_rollcall.cli:cli"
+xmurollcall-cli = "xmu_rollcall.cli:cli"
 
 [tool.setuptools]
 packages = ["xmu_rollcall"]

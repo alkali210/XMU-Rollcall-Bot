@@ -45,8 +45,43 @@ DEFAULT_ACCOUNT = {
     "id": 0,
     "name": "",
     "username": "",
-    "password": ""
+    "password": "",
+    "rollcall_settings": {
+        "wait_before_answer": False,
+    }
 }
+
+DEFAULT_ROLLCALL_SETTINGS = DEFAULT_ACCOUNT["rollcall_settings"].copy()
+
+def normalize_rollcall_settings(settings):
+    """Normalize rollcall wait settings and fill defaults."""
+    merged = DEFAULT_ROLLCALL_SETTINGS.copy()
+
+    if not settings:
+        return merged
+
+    # New simplified schema:
+    #   false -> do not wait
+    #   number -> wait until that many classmates have signed
+    wait_value = settings.get("wait_before_answer")
+
+    # Backward compatibility for configs written by the previous implementation.
+    if wait_value is None:
+        mode = settings.get("wait_before_answer_mode", "none")
+        if mode in ("fixed", "random"):
+            wait_value = settings.get("wait_before_answer_count_min", False)
+
+    if wait_value is False or wait_value is None:
+        merged["wait_before_answer"] = False
+        return merged
+
+    try:
+        wait_count = int(wait_value)
+    except (TypeError, ValueError):
+        wait_count = 0
+
+    merged["wait_before_answer"] = wait_count if wait_count > 0 else False
+    return merged
 
 def ensure_config_dir():
     """确保配置目录存在"""
@@ -73,12 +108,18 @@ def load_config():
                                 "id": 1,
                                 "name": "",
                                 "username": old_username,
-                                "password": old_password
+                                "password": old_password,
+                                "rollcall_settings": DEFAULT_ROLLCALL_SETTINGS.copy(),
                             }],
                             "current_account_id": 1
                         }
                         return new_config
                     return DEFAULT_CONFIG.copy()
+                for acc in config.get("accounts", []):
+                    if isinstance(acc, dict):
+                        acc["rollcall_settings"] = normalize_rollcall_settings(
+                            acc.get("rollcall_settings")
+                        )
                 return config
         except Exception:
             return DEFAULT_CONFIG.copy()
@@ -104,7 +145,8 @@ def add_account(config, username, password, name):
         "id": account_id,
         "name": name,
         "username": username,
-        "password": password
+        "password": password,
+        "rollcall_settings": DEFAULT_ROLLCALL_SETTINGS.copy(),
     }
     if "accounts" not in config:
         config["accounts"] = []
@@ -131,6 +173,14 @@ def get_current_account(config):
 def set_current_account(config, account_id):
     """设置当前账号"""
     config["current_account_id"] = account_id
+
+def get_rollcall_settings(account):
+    """Return rollcall settings with defaults filled in."""
+    return normalize_rollcall_settings((account or {}).get("rollcall_settings") or {})
+
+def set_rollcall_settings(account, settings):
+    """Persist normalized rollcall settings on an account."""
+    account["rollcall_settings"] = normalize_rollcall_settings(settings or {})
 
 def get_all_accounts(config):
     """获取所有账号"""
@@ -226,4 +276,3 @@ def perform_account_deletion(cookies_to_delete, cookies_to_rename):
             if os.path.exists(new_path):
                 os.remove(new_path)
             os.rename(old_path, new_path)
-
