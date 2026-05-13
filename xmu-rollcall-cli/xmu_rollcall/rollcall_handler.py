@@ -149,5 +149,7 @@ def handle_rollcalls(data, session, account=None):
             else:
                 # TODO: qrcode rollcall
                 print("Answering failed. QRcode rollcall not supported yet.")
+                print("Waiting for 5 minutes before next attempt...")
+                time.sleep(300)
 
     return answer_status
