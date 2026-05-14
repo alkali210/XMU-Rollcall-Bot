@@ -6,6 +6,24 @@ from .config import get_rollcall_settings
 
 logger = logging.getLogger(__name__)
 WAIT_POLL_INTERVAL = 3
+SIGNED_STATUSES = {
+    "present",
+    "signed",
+    "success",
+    "on_call_fine",
+    "attended",
+    "late",
+    "已签到",
+    "签到成功",
+}
+SIGNED_TIME_FIELDS = (
+    "answered_at",
+    "submitted_at",
+    "submit_time",
+    "signed_at",
+    "answer_time",
+    "checkin_time",
+)
 
 def log_and_print(*args, **kwargs):
     builtins.print(*args, **kwargs)
@@ -27,10 +45,10 @@ def _extract_student_rollcalls(payload):
 def _is_signed_student(student):
     if not isinstance(student, dict):
         return False
-    if student.get("updated_at") or student.get("answered_at") or student.get("submitted_at"):
+    if any(student.get(field) for field in SIGNED_TIME_FIELDS):
         return True
     status = str(student.get("status") or "").lower()
-    return status in {"present", "signed", "success", "on_call_fine", "attended"}
+    return status in SIGNED_STATUSES
 
 def _fetch_signed_count(session, rollcall_id):
     """Query current number of students who have already signed."""
@@ -41,7 +59,19 @@ def _fetch_signed_count(session, rollcall_id):
         )
         if resp.status_code == 200:
             students = _extract_student_rollcalls(resp.json())
-            return sum(1 for student in students if _is_signed_student(student))
+            count = sum(1 for student in students if _is_signed_student(student))
+            status_summary = {}
+            for student in students:
+                status = str(student.get("status") or "<missing>") if isinstance(student, dict) else "<invalid>"
+                status_summary[status] = status_summary.get(status, 0) + 1
+            logger.debug(
+                "Signed count for rollcall_id=%s: %s/%s, statuses=%s",
+                rollcall_id,
+                count,
+                len(students),
+                status_summary,
+            )
+            return count
     except Exception as exc:
         logger.debug("Failed to fetch signed count for rollcall_id=%s: %s", rollcall_id, exc)
     return None
