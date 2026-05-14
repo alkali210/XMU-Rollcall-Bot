@@ -45,7 +45,9 @@ setup(
     # Entry points
     entry_points={
         "console_scripts": [
-            "xmurollcall-cli=xmu_rollcall.cli:cli",
+            "XMUrollcall-cli=xmu_rollcall.cli:cli",
+            "xmu-rollcall-cli=xmu_rollcall.cli:cli",
+            "xmu=xmu_rollcall.cli:cli",
         ],
     },
 

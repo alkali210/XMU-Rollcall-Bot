@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 base_url = "https://lnt.xmu.edu.cn"
 DEFAULT_INTERVAL = 10
+DEFAULT_DELAY = 10
 interval = DEFAULT_INTERVAL
 headers = {
     "User-Agent": (
@@ -62,10 +63,14 @@ def _coerce_number(value, default):
         return default
 
 def _load_monitor_settings():
-    """Load monitor polling interval from config."""
+    """从配置文件中加载：interval为轮询间隔；delay为尝试签到之前的等待时间，设置为false则不等待"""
     config = load_config()
     interval_value = _coerce_number(config.get("interval"), DEFAULT_INTERVAL)
-    return interval_value
+    delay_value = config.get("delay", DEFAULT_DELAY)
+    if delay_value is False:
+        return interval_value, False
+    delay_value = _coerce_number(delay_value, DEFAULT_DELAY)
+    return interval_value, delay_value
 
 def get_terminal_width():
     """获取终端宽度"""
@@ -221,7 +226,7 @@ def start_monitor(account):
     """启动监控程序"""
     log_file = setup_logging()
     global interval
-    interval = _load_monitor_settings()
+    interval, delay_seconds = _load_monitor_settings()
     USERNAME = account['username']
     PASSWORD = account['password']
     ACCOUNT_ID = account.get('id', 1)
@@ -328,7 +333,24 @@ def start_monitor(account):
                             print(center_text(f"{Colors.WARNING}{Colors.BOLD}NEW ROLLCALL DETECTED{Colors.ENDC}"))
                             print(f"{Colors.WARNING}{Colors.BOLD}{'!' * width}{Colors.ENDC}\n")
                             
-                            temp_data = process_rollcalls(temp_data, session, account)
+                            should_delay = any(
+                                rollcall.get('is_radar') or rollcall.get('is_number')
+                                for rollcall in temp_data.get('rollcalls', [])
+                            )
+                            if should_delay and delay_seconds is not False:
+                                logger.info(
+                                    "Waiting %s seconds before attempting rollcall...",
+                                    delay_seconds,
+                                )
+                                print(
+                                    f"{Colors.GRAY}Waiting {delay_seconds} seconds before attempting rollcall...{Colors.ENDC}"
+                                )
+                                try:
+                                    time.sleep(delay_seconds)
+                                except KeyboardInterrupt:
+                                    raise
+                                
+                            temp_data = process_rollcalls(temp_data, session)
                             print_separator("=")
                             print(f"\n{center_text(f'{Colors.GRAY}Press Ctrl+C to exit, continuing monitor...{Colors.ENDC}')}\n")
                             try:

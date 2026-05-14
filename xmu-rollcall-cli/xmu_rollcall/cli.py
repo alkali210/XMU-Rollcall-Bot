@@ -6,8 +6,7 @@ from . import __version__
 from .config import (
     load_config, save_config, is_config_complete, get_cookies_path,
     add_account, get_all_accounts, get_current_account, set_current_account,
-    get_account_by_id, CONFIG_FILE, delete_account, perform_account_deletion,
-    get_rollcall_settings, set_rollcall_settings
+    get_account_by_id, CONFIG_FILE, delete_account, perform_account_deletion
 )
 from .logging_config import setup_logging
 from .monitor import start_monitor, base_url, headers
@@ -37,193 +36,157 @@ def cli(ctx):
     if ctx.invoked_subcommand is None:
         click.echo(f"{Colors.OKCYAN}{Colors.BOLD}XMU Rollcall Bot CLI v{__version__}{Colors.ENDC}")
         click.echo(f"\nUsage:")
-        click.echo(f"  xmurollcall-cli config    Configure credentials and settings")
-        click.echo(f"  xmurollcall-cli switch    Switch between accounts")
-        click.echo(f"  xmurollcall-cli start     Start monitoring rollcalls")
-        click.echo(f"  xmurollcall-cli refresh   Refresh the login status")
-        click.echo(f"  xmurollcall-cli --help    Show this message")
+        click.echo(f"  xmu config    Configure credentials and add accounts")
+        click.echo(f"  xmu switch    Switch between accounts")
+        click.echo(f"  xmu start     Start monitoring rollcalls")
+        click.echo(f"  xmu refresh   Refresh the login status")
+        click.echo(f"  xmu --help    Show this message")
 
 @cli.command()
 def config():
-    """Configure accounts and rollcall settings."""
+    """配置账号：添加、删除账号"""
     click.echo(f"\n{Colors.BOLD}{Colors.OKCYAN}=== XMU Rollcall Configuration ==={Colors.ENDC}\n")
 
     current_config = load_config()
 
     def show_accounts():
+        """显示账号列表"""
         accounts = get_all_accounts(current_config)
         if accounts:
             click.echo(f"{Colors.BOLD}Existing accounts:{Colors.ENDC}")
             current_account = get_current_account(current_config)
             for acc in accounts:
                 current_marker = f" {Colors.OKGREEN}(current){Colors.ENDC}" if current_account and acc.get("id") == current_account.get("id") else ""
-                settings = get_rollcall_settings(acc)
-                wait_value = settings.get("wait_before_answer")
-                wait_text = "no wait" if wait_value is False else f"wait {wait_value} classmates"
-                click.echo(f"  {acc.get('id')}: {acc.get('name') or acc.get('username')}{current_marker} [{wait_text}]")
+                click.echo(f"  {acc.get('id')}: {acc.get('name') or acc.get('username')}{current_marker}")
             click.echo()
         else:
             click.echo(f"{Colors.GRAY}No accounts configured.{Colors.ENDC}\n")
 
     def add_new_account():
+        """添加新账号"""
         click.echo(f"{Colors.BOLD}Adding a new account...{Colors.ENDC}\n")
+
+        # 输入新账号信息
         username = click.prompt(f"{Colors.BOLD}Username{Colors.ENDC}")
         password = click.prompt(f"{Colors.BOLD}Password{Colors.ENDC}", hide_input=False)
 
+        # 验证登录
         click.echo(f"\n{Colors.OKCYAN}Validating credentials...{Colors.ENDC}")
         try:
             session = xmulogin(type=3, username=username, password=password)
-            if not session:
-                click.echo(f"{Colors.FAIL}Login failed. Please check your credentials.{Colors.ENDC}")
-                return
+            if session:
+                logger.info("Credential validation succeeded for username=%s", username)
+                click.echo(f"{Colors.OKGREEN}✓ Login successful!{Colors.ENDC}")
 
-            logger.info("Credential validation succeeded for username=%s", username)
-            click.echo(f"{Colors.OKGREEN}Login successful!{Colors.ENDC}")
+                # 获取用户姓名
+                click.echo(f"{Colors.OKCYAN}Fetching user profile...{Colors.ENDC}")
+                try:
+                    profile = session.get(f"{base_url}/api/profile", headers=headers).json()
+                    name = profile.get("name", "")
+                    click.echo(f"{Colors.OKGREEN}✓ Welcome, {name}!{Colors.ENDC}")
+                except Exception:
+                    click.echo(f"{Colors.WARNING}⚠ Could not fetch profile, using username as name{Colors.ENDC}")
+                    name = username
 
-            click.echo(f"{Colors.OKCYAN}Fetching user profile...{Colors.ENDC}")
-            try:
-                profile = session.get(f"{base_url}/api/profile", headers=headers).json()
-                name = profile.get("name", "")
-                click.echo(f"{Colors.OKGREEN}Welcome, {name}!{Colors.ENDC}")
-            except Exception:
-                click.echo(f"{Colors.WARNING}Could not fetch profile, using username as name{Colors.ENDC}")
-                name = username
+                # 添加账号
+                try:
+                    account_id = add_account(current_config, username, password, name)
+                    save_config(current_config)
 
-            try:
-                account_id = add_account(current_config, username, password, name)
-                save_config(current_config)
-                click.echo(f"{Colors.OKGREEN}Account added successfully! (ID: {account_id}){Colors.ENDC}")
-                click.echo(f"{Colors.GRAY}Configuration file: {CONFIG_FILE}{Colors.ENDC}\n")
-            except RuntimeError as e:
-                click.echo(f"{Colors.FAIL}Failed to save configuration: {str(e)}{Colors.ENDC}")
-                click.echo(f"{Colors.WARNING}Tip: set XMU_ROLLCALL_CONFIG_DIR to choose a writable config directory.{Colors.ENDC}")
+                    click.echo(f"{Colors.OKGREEN}✓ Account added successfully! (ID: {account_id}){Colors.ENDC}")
+                    click.echo(f"{Colors.GRAY}Configuration file: {CONFIG_FILE}{Colors.ENDC}\n")
+                except RuntimeError as e:
+                    click.echo(f"{Colors.FAIL}✗ Failed to save configuration: {str(e)}{Colors.ENDC}")
+                    click.echo(f"{Colors.WARNING}Tip: In sandboxed environments (like a-Shell), set environment variable:{Colors.ENDC}")
+                    click.echo(f"  export XMU_ROLLCALL_CONFIG_DIR=~/Documents/.xmu_rollcall")
+            else:
+                click.echo(f"{Colors.FAIL}✗ Login failed. Please check your credentials.{Colors.ENDC}")
         except Exception as e:
-            click.echo(f"{Colors.FAIL}Error during login validation: {str(e)}{Colors.ENDC}")
+            click.echo(f"{Colors.FAIL}✗ Error during login validation: {str(e)}{Colors.ENDC}")
 
     def delete_existing_account():
+        """删除账号"""
         accounts = get_all_accounts(current_config)
         if not accounts:
             click.echo(f"{Colors.WARNING}No accounts to delete.{Colors.ENDC}\n")
             return
 
         show_accounts()
+
+        # 让用户选择要删除的账号
         valid_ids = [str(acc.get("id")) for acc in accounts]
         selected_id = click.prompt(
             f"{Colors.BOLD}Enter account ID to delete{Colors.ENDC}",
-            type=click.Choice(valid_ids, case_sensitive=False),
+            type=click.Choice(valid_ids, case_sensitive=False)
         )
+
         selected_id = int(selected_id)
         selected_account = get_account_by_id(current_config, selected_id)
-        if not selected_account:
-            click.echo(f"{Colors.FAIL}Account not found.{Colors.ENDC}\n")
-            return
 
-        confirm = click.prompt(
-            f"{Colors.WARNING}Are you sure you want to delete account '{selected_account.get('name') or selected_account.get('username')}' (ID: {selected_id})?{Colors.ENDC}",
-            type=click.Choice(['y', 'n'], case_sensitive=False),
-            default='n',
-        )
-        if confirm.lower() != 'y':
-            click.echo(f"{Colors.GRAY}Deletion cancelled.{Colors.ENDC}\n")
-            return
+        if selected_account:
+            # 确认删除
+            confirm = click.prompt(
+                f"{Colors.WARNING}Are you sure you want to delete account '{selected_account.get('name') or selected_account.get('username')}' (ID: {selected_id})?{Colors.ENDC}",
+                type=click.Choice(['y', 'n'], case_sensitive=False),
+                default='n'
+            )
 
-        success, cookies_to_delete, cookies_to_rename = delete_account(current_config, selected_id)
-        if success:
-            save_config(current_config)
-            perform_account_deletion(cookies_to_delete, cookies_to_rename)
-            click.echo(f"{Colors.OKGREEN}Account deleted successfully!{Colors.ENDC}")
-            if cookies_to_rename:
-                click.echo(f"{Colors.GRAY}Note: Account IDs have been re-assigned.{Colors.ENDC}")
-            click.echo()
+            if confirm.lower() == 'y':
+                # 执行删除
+                success, cookies_to_delete, cookies_to_rename = delete_account(current_config, selected_id)
+
+                if success:
+                    # 保存配置
+                    save_config(current_config)
+
+                    # 处理cookies文件
+                    perform_account_deletion(cookies_to_delete, cookies_to_rename)
+
+                    click.echo(f"{Colors.OKGREEN}✓ Account deleted successfully!{Colors.ENDC}")
+
+                    # 显示ID变更提示
+                    if cookies_to_rename:
+                        click.echo(f"{Colors.GRAY}Note: Account IDs have been re-assigned.{Colors.ENDC}")
+                    click.echo()
+                else:
+                    click.echo(f"{Colors.FAIL}✗ Failed to delete account.{Colors.ENDC}\n")
+            else:
+                click.echo(f"{Colors.GRAY}Deletion cancelled.{Colors.ENDC}\n")
         else:
-            click.echo(f"{Colors.FAIL}Failed to delete account.{Colors.ENDC}\n")
+            click.echo(f"{Colors.FAIL}✗ Account not found.{Colors.ENDC}\n")
 
-    def edit_account_settings():
-        accounts = get_all_accounts(current_config)
-        if not accounts:
-            click.echo(f"{Colors.WARNING}No accounts to configure.{Colors.ENDC}\n")
-            return
-
-        show_accounts()
-        valid_ids = [str(acc.get("id")) for acc in accounts]
-        selected_id = click.prompt(
-            f"{Colors.BOLD}Enter account ID to edit settings{Colors.ENDC}",
-            type=click.Choice(valid_ids, case_sensitive=False),
-        )
-        selected_account = get_account_by_id(current_config, int(selected_id))
-        if not selected_account:
-            click.echo(f"{Colors.FAIL}Account not found.{Colors.ENDC}\n")
-            return
-
-        settings = get_rollcall_settings(selected_account)
-        current_wait = settings.get("wait_before_answer", False)
-        current_wait_text = "false" if current_wait is False else str(current_wait)
-
-        click.echo()
-        click.echo(f"{Colors.BOLD}Rollcall settings for {selected_account.get('name') or selected_account.get('username')}:{Colors.ENDC}")
-        click.echo(f"  wait_before_answer: {Colors.OKCYAN}{current_wait_text}{Colors.ENDC}")
-        click.echo()
-        click.echo("Set wait_before_answer:")
-        click.echo("  false  - do not wait after getting the number code")
-        click.echo("  number - wait until that many classmates have signed")
-
-        raw_value = click.prompt(
-            f"{Colors.BOLD}wait_before_answer{Colors.ENDC}",
-            default=current_wait_text,
-            show_default=True,
-        ).strip().lower()
-
-        if raw_value in ("false", "f", "no", "n", "0", "off", ""):
-            wait_before_answer = False
-        else:
-            try:
-                wait_before_answer = int(raw_value)
-            except ValueError:
-                click.echo(f"{Colors.FAIL}Invalid value. Use false or a positive number.{Colors.ENDC}\n")
-                return
-            if wait_before_answer <= 0:
-                wait_before_answer = False
-
-        set_rollcall_settings(selected_account, {"wait_before_answer": wait_before_answer})
-        save_config(current_config)
-        saved = get_rollcall_settings(selected_account).get("wait_before_answer")
-        saved_text = "false" if saved is False else str(saved)
-        click.echo(f"{Colors.OKGREEN}Settings saved. wait_before_answer = {saved_text}{Colors.ENDC}\n")
-
+    # 主循环
     while True:
         show_accounts()
+
         click.echo(f"{Colors.BOLD}Choose an action:{Colors.ENDC}")
         click.echo(f"  {Colors.OKCYAN}n{Colors.ENDC} - Add new account")
         click.echo(f"  {Colors.OKCYAN}d{Colors.ENDC} - Delete account")
-        click.echo(f"  {Colors.OKCYAN}s{Colors.ENDC} - Edit rollcall settings")
         click.echo(f"  {Colors.OKCYAN}q{Colors.ENDC} - Quit")
 
         action = click.prompt(
             f"\n{Colors.BOLD}Action{Colors.ENDC}",
-            type=click.Choice(['n', 'd', 's', 'q'], case_sensitive=False),
-            default='q',
+            type=click.Choice(['n', 'd', 'q'], case_sensitive=False),
+            default='q'
         )
+
         click.echo()
 
         if action.lower() == 'n':
             add_new_account()
         elif action.lower() == 'd':
             delete_existing_account()
-        elif action.lower() == 's':
-            edit_account_settings()
         elif action.lower() == 'q':
+            # 退出前显示最终账号列表
             accounts = get_all_accounts(current_config)
             if accounts:
                 click.echo(f"{Colors.BOLD}Final account list:{Colors.ENDC}")
                 current_account = get_current_account(current_config)
                 for acc in accounts:
                     current_marker = f" {Colors.OKGREEN}(current){Colors.ENDC}" if current_account and acc.get("id") == current_account.get("id") else ""
-                    settings = get_rollcall_settings(acc)
-                    wait_value = settings.get("wait_before_answer")
-                    wait_text = "no wait" if wait_value is False else f"wait {wait_value} classmates"
-                    click.echo(f"  {acc.get('id')}: {acc.get('name') or acc.get('username')}{current_marker} [{wait_text}]")
-                click.echo(f"\n{Colors.GRAY}You can run: {Colors.BOLD}xmurollcall-cli switch{Colors.ENDC} to switch between accounts")
-                click.echo(f"{Colors.GRAY}You can run: {Colors.BOLD}xmurollcall-cli start{Colors.ENDC} to start monitoring")
+                    click.echo(f"  {acc.get('id')}: {acc.get('name') or acc.get('username')}{current_marker}")
+                click.echo(f"\n{Colors.GRAY}You can run: {Colors.BOLD}xmu switch{Colors.ENDC} to switch between accounts")
+                click.echo(f"{Colors.GRAY}You can run: {Colors.BOLD}xmu start{Colors.ENDC} to start monitoring")
             break
 
 @cli.command()
@@ -236,7 +199,7 @@ def start():
     # 检查配置是否完整
     if not is_config_complete(config_data):
         click.echo(f"{Colors.FAIL}✗ Configuration incomplete!{Colors.ENDC}")
-        click.echo(f"Please run: {Colors.BOLD}xmurollcall-cli config{Colors.ENDC}")
+        click.echo(f"Please run: {Colors.BOLD}xmu config{Colors.ENDC}")
         sys.exit(1)
 
     # 获取当前账号
@@ -264,7 +227,7 @@ def refresh():
 
     if not current_account:
         click.echo(f"{Colors.FAIL}✗ No account configured!{Colors.ENDC}")
-        click.echo(f"Please run: {Colors.BOLD}xmurollcall-cli config{Colors.ENDC}")
+        click.echo(f"Please run: {Colors.BOLD}xmu config{Colors.ENDC}")
         sys.exit(1)
 
     account_id = current_account.get("id")
@@ -294,7 +257,7 @@ def switch():
 
     if not accounts:
         click.echo(f"{Colors.FAIL}✗ No accounts configured!{Colors.ENDC}")
-        click.echo(f"Please run: {Colors.BOLD}xmurollcall-cli config{Colors.ENDC}")
+        click.echo(f"Please run: {Colors.BOLD}xmu config{Colors.ENDC}")
         sys.exit(1)
 
     current_account = get_current_account(config_data)
@@ -322,7 +285,7 @@ def switch():
         set_current_account(config_data, selected_id)
         save_config(config_data)
         click.echo(f"\n{Colors.OKGREEN}✓ Switched to account: {selected_account.get('name') or selected_account.get('username')} (ID: {selected_id}){Colors.ENDC}")
-        click.echo(f"{Colors.GRAY}You can now run: {Colors.BOLD}xmurollcall-cli start{Colors.ENDC}")
+        click.echo(f"{Colors.GRAY}You can now run: {Colors.BOLD}xmu start{Colors.ENDC}")
     else:
         click.echo(f"{Colors.FAIL}✗ Account not found!{Colors.ENDC}")
         sys.exit(1)

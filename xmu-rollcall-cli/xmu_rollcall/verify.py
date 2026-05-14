@@ -106,10 +106,17 @@ def get_number_rollcall_info(in_session, rollcall_id):
         return None, status, end_time, "Failed to get number code. 'number_code' not found in API response."
     return number_code, status, end_time, None
 
-def submit_number_code(in_session, rollcall_id, number_code, status=None, end_time=None, started_at=None):
+def send_code(in_session, rollcall_id):
     print = log_and_print
     answer_url = f"{base_url}/api/rollcall/{rollcall_id}/answer_number_rollcall"
-    t00 = started_at or time.time()
+    print("Trying number code from API...")
+    t00 = time.time()
+
+    number_code, status, end_time, error = get_number_rollcall_info(in_session, rollcall_id)
+    if error:
+        t01 = time.time()
+        print(f"{error}\nTime: {t01 - t00:.2f} s.")
+        return False
 
     payload = {
         "deviceId": str(uuid.uuid4()),
@@ -138,30 +145,6 @@ def submit_number_code(in_session, rollcall_id, number_code, status=None, end_ti
         t01 = time.time()
         print(f"Failed to submit number code: {e}\nTime: {t01 - t00:.2f} s.")
         return False
-
-def send_code(in_session, rollcall_id, before_submit=None):
-    print = log_and_print
-    print("Trying number code from API...")
-    t00 = time.time()
-
-    number_code, status, end_time, error = get_number_rollcall_info(in_session, rollcall_id)
-    if error:
-        t01 = time.time()
-        print(f"{error}\nTime: {t01 - t00:.2f} s.")
-        return False
-
-    print("Number code obtained from API.")
-    if before_submit is not None:
-        before_submit(number_code, status, end_time)
-
-    return submit_number_code(
-        in_session,
-        rollcall_id,
-        number_code,
-        status=status,
-        end_time=end_time,
-        started_at=t00,
-    )
 
 def send_radar(in_session, rollcall_id):
     print = log_and_print
