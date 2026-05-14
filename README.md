@@ -7,16 +7,18 @@ Automatic Check-In Program for XMU(Tronclass), **Intended for educational and re
 - Monitor rollcall status in real-time
 - Perform rollcall automatically:
   - Number rollcall: get number code from API
-  - Radar rollcall: find the location using two points
+  - Radar rollcall: solve the location using two points
 - Supports waiting until a certain number of classmates have checked in before submitting
-- Supports multiple accounts
+- Supports multiple accounts, stores encrypted account informations and sessions in sqlite
 - Using a log file to record the rollcall status
 
-This project is based on version 3.4.1 of [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot), which has been archived.
+This project is based on version 3.4.1 of [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot).
 
 ## Installation
 
 ```bash
+git clone --depth 1 https://github.com/alkali210/XMU-Rollcall-Bot.git
+cd XMU-Rollcall-Bot
 pip install -e xmu-rollcall-cli
 ```
 > also see [XMU Rollcall Bot CLI 使用文档](https://krsmt.notion.site/cli-doc)
@@ -27,25 +29,19 @@ pip install -e xmu-rollcall-cli
 xmurollcall-cli config  # configure your account. support multiple accounts.
 xmurollcall-cli switch  # switch between accounts.
 xmurollcall-cli start   # start the monitor.
+xmurollcall-cli refresh # refresh login status。
 ```
-> the previous alias `xmu` is no longer supported.
 
 See log at `CONFIG_DIR/xmu_rollcall.log`
 
 ### Configuration
 
-```bash
-xmurollcall-cli config
-```
-to configure your account. You can add multiple accounts, and edit rollcall settings for each account.
-
 Default configuration file path: `$env:XMU_ROLLCALL_CONFIG_DIR/config.json` > `~/.xmu_rollcall/config.json` > `./config.json`
 
-You can set the interval for monitoring *(default: 10s)*:
+You can set the interval for monitoring and waiting time before submitting *(default: 10s)*:
 ```jsonc
 {
-  "interval": 8
+  "interval": 8,
+  "delay": 15
 }
 ```
-
-> The configuration file stores credentials in plain text; do not post it anywhere.
