@@ -1,6 +1,8 @@
 import os
 import json
 import requests
+from . import secure_store
+from .config import get_cookies_path
 
 base_url = "https://lnt.xmu.edu.cn"
 headers = {
@@ -18,18 +20,39 @@ def clear_screen():
     else:
         os.system('clear')
 
+def _is_account_id(value):
+    return isinstance(value, int) or (isinstance(value, str) and value.isdigit())
+
 def save_session(sess: requests.Session, path: str):
-    """保存session到文件"""
+    """保存session到加密SQLite；传入文件路径时兼容旧版JSON行为"""
     try:
         cj_dict = requests.utils.dict_from_cookiejar(sess.cookies)
+        if _is_account_id(path):
+            secure_store.save_session(int(path), cj_dict)
+            return
         with open(path, "w", encoding="utf-8") as f:
             json.dump(cj_dict, f)
     except Exception:
         pass
 
 def load_session(sess: requests.Session, path: str):
-    """从文件加载session"""
+    """从加密SQLite加载session；必要时兼容迁移旧版JSON cookies"""
     try:
+        if _is_account_id(path):
+            account_id = int(path)
+            cj_dict = secure_store.load_session(account_id)
+            if cj_dict is None:
+                legacy_path = get_cookies_path(account_id)
+                with open(legacy_path, "r", encoding="utf-8") as f:
+                    cj_dict = json.load(f)
+                secure_store.save_session(account_id, cj_dict)
+                try:
+                    os.remove(legacy_path)
+                except OSError:
+                    pass
+            sess.cookies = requests.utils.cookiejar_from_dict(cj_dict)
+            return True
+
         with open(path, "r", encoding="utf-8") as f:
             cj_dict = json.load(f)
         sess.cookies = requests.utils.cookiejar_from_dict(cj_dict)
@@ -48,4 +71,3 @@ def verify_session(sess: requests.Session) -> dict:
     except Exception:
         pass
     return {}
-

@@ -9,7 +9,7 @@ from . import __version__
 from .logging_config import setup_logging, strip_ansi
 from .utils import clear_screen, save_session, load_session, verify_session
 from .rollcall_handler import process_rollcalls
-from .config import get_cookies_path, load_config
+from .config import get_cookies_path, load_config, has_saved_session
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +237,7 @@ def start_monitor(account):
     # 设置全局位置信息
     # set_location(LATITUDE, LONGITUDE)
 
-    cookies_path = get_cookies_path(ACCOUNT_ID)
+    legacy_cookies_path = get_cookies_path(ACCOUNT_ID)
     rollcalls_url = f"{base_url}/api/radar/rollcalls"
     session = None
     logger.info("Starting monitor for account id=%s name=%s", ACCOUNT_ID, ACCOUNT_NAME or USERNAME)
@@ -251,10 +251,10 @@ def start_monitor(account):
 
     print(f"\n{Colors.OKCYAN}[Step 1/3]{Colors.ENDC} Checking credentials...")
 
-    if os.path.exists(cookies_path):
+    if has_saved_session(ACCOUNT_ID) or os.path.exists(legacy_cookies_path):
         print(f"{Colors.OKCYAN}[Step 2/3]{Colors.ENDC} Found cached session, attempting to restore...")
         session_candidate = requests.Session()
-        if load_session(session_candidate, cookies_path):
+        if load_session(session_candidate, ACCOUNT_ID):
             profile = verify_session(session_candidate)
             if profile:
                 session = session_candidate
@@ -269,7 +269,7 @@ def start_monitor(account):
         time.sleep(2)
         session = xmulogin(type=3, username=USERNAME, password=PASSWORD)
         if session:
-            save_session(session, cookies_path)
+            save_session(session, ACCOUNT_ID)
             print_login_status("Login successful", True)
         else:
             print_login_status("Login failed. Please check your credentials", False)

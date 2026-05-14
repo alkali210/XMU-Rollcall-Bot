@@ -5,5 +5,7 @@ legacy/v3.0.1/info.txt
 .omx/
 .xmu_rollcall/
 config.json
+secure_store.sqlite3
+secret.key
 *.log
 *bootstrap*

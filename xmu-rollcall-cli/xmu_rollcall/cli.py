@@ -6,7 +6,8 @@ from . import __version__
 from .config import (
     load_config, save_config, is_config_complete, get_cookies_path,
     add_account, get_all_accounts, get_current_account, set_current_account,
-    get_account_by_id, CONFIG_FILE, delete_account, perform_account_deletion
+    get_account_by_id, CONFIG_FILE, delete_account, perform_account_deletion,
+    delete_saved_session
 )
 from .logging_config import setup_logging
 from .monitor import start_monitor, base_url, headers
@@ -68,7 +69,7 @@ def config():
 
         # 输入新账号信息
         username = click.prompt(f"{Colors.BOLD}Username{Colors.ENDC}")
-        password = click.prompt(f"{Colors.BOLD}Password{Colors.ENDC}", hide_input=False)
+        password = click.prompt(f"{Colors.BOLD}Password{Colors.ENDC}", hide_input=True)
 
         # 验证登录
         click.echo(f"\n{Colors.OKCYAN}Validating credentials...{Colors.ENDC}")
@@ -233,17 +234,18 @@ def refresh():
     account_id = current_account.get("id")
     cookies_path = get_cookies_path(account_id)
     try:
-        click.echo(f"\n{Colors.WARNING}Deleting cookies for account {account_id} ({current_account.get('name')})...{Colors.ENDC}")
-        # delete cookies file
+        click.echo(f"\n{Colors.WARNING}Deleting saved session for account {account_id} ({current_account.get('name')})...{Colors.ENDC}")
+        delete_saved_session(account_id)
+        # delete legacy cookies file if present
         import os
         if os.path.exists(cookies_path):
             os.remove(cookies_path)
-            click.echo(f"{Colors.OKGREEN}✓ Cookies deleted successfully.{Colors.ENDC}")
+            click.echo(f"{Colors.OKGREEN}Saved session deleted successfully. Legacy cookies file removed too.{Colors.ENDC}")
         else:
-            click.echo(f"{Colors.GRAY}No cookies file found to delete.{Colors.ENDC}")
+            click.echo(f"{Colors.OKGREEN}Saved session deleted successfully.{Colors.ENDC}")
         sys.exit(0)
     except Exception as e:
-        click.echo(f"{Colors.FAIL}✗ Failed to delete cookies: {str(e)}{Colors.ENDC}")
+        click.echo(f"{Colors.FAIL}Failed to delete saved session: {str(e)}{Colors.ENDC}")
         sys.exit(1)
 
 

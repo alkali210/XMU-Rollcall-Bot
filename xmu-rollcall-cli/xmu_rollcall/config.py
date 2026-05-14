@@ -1,6 +1,7 @@
 import os
 import json
 from pathlib import Path
+from . import secure_store
 
 def get_config_dir():
     """
@@ -35,6 +36,7 @@ def get_config_dir():
 
 CONFIG_DIR = get_config_dir()
 CONFIG_FILE = CONFIG_DIR / "config.json"
+secure_store.configure(CONFIG_DIR)
 
 DEFAULT_CONFIG = {
     "accounts": [],
@@ -48,6 +50,14 @@ DEFAULT_ACCOUNT = {
     "password": ""
 }
 
+def _with_stored_accounts(config, accounts):
+    """Attach decrypted accounts from SQLite to an in-memory config."""
+    config = (config or DEFAULT_CONFIG).copy()
+    config["accounts"] = accounts
+    if config.get("current_account_id") is None and accounts:
+        config["current_account_id"] = accounts[0].get("id")
+    return config
+
 def ensure_config_dir():
     """确保配置目录存在"""
     try:
@@ -58,6 +68,7 @@ def ensure_config_dir():
 def load_config():
     """加载配置文件"""
     ensure_config_dir()
+    stored_accounts = secure_store.list_accounts()
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -77,18 +88,34 @@ def load_config():
                             }],
                             "current_account_id": 1
                         }
+                        secure_store.replace_accounts(new_config["accounts"])
+                        save_config(new_config)
                         return new_config
                     return DEFAULT_CONFIG.copy()
-                return config
+                legacy_accounts = config.get("accounts", [])
+                if legacy_accounts and any(acc.get("username") or acc.get("password") for acc in legacy_accounts):
+                    secure_store.replace_accounts(legacy_accounts)
+                    config["accounts"] = secure_store.list_accounts()
+                    save_config(config)
+                    return config
+                return _with_stored_accounts(config, stored_accounts)
         except Exception:
-            return DEFAULT_CONFIG.copy()
-    return DEFAULT_CONFIG.copy()
+            return _with_stored_accounts(DEFAULT_CONFIG, stored_accounts)
+    return _with_stored_accounts(DEFAULT_CONFIG, stored_accounts)
 
 def save_config(config):
     """保存配置文件"""
     ensure_config_dir()
+    accounts = config.get("accounts", [])
+    if "accounts" in config:
+        secure_store.replace_accounts(accounts)
+    safe_config = {
+        key: value
+        for key, value in config.items()
+        if key != "accounts" and key not in {"username", "password"}
+    }
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
+        json.dump(safe_config, f, indent=2, ensure_ascii=False)
 
 def get_next_account_id(config):
     """获取下一个可用的账号ID"""
@@ -145,12 +172,20 @@ def is_config_complete(config):
     return all(current_account.get(field) for field in required_fields)
 
 def get_cookies_path(account_id=None):
-    """获取cookies文件路径，根据账号ID命名"""
+    """获取旧版cookies文件路径，仅用于兼容迁移"""
     ensure_config_dir()
     if account_id is None:
         config = load_config()
         account_id = config.get("current_account_id", 1)
     return str(CONFIG_DIR / f"{account_id}.json")
+
+def has_saved_session(account_id):
+    """检查SQLite中是否有加密session"""
+    return secure_store.has_session(account_id)
+
+def delete_saved_session(account_id):
+    """删除SQLite中的加密session"""
+    secure_store.delete_session(account_id)
 
 def delete_account(config, account_id):
     """
