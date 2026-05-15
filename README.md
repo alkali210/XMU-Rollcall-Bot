@@ -17,7 +17,7 @@ This project is based on version 3.4.1 of [KrsMt-0113/XMU-Rollcall-Bot](https://
 ## Installation
 
 ```bash
-git clone --depth 1 https://github.com/alkali210/XMU-Rollcall-Bot.git
+git clone --depth 1 -b main https://github.com/alkali210/XMU-Rollcall-Bot.git
 cd XMU-Rollcall-Bot
 pip install -e xmu-rollcall-cli
 ```
