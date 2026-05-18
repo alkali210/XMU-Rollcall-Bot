@@ -38,10 +38,9 @@ See log at `CONFIG_DIR/xmu_rollcall.log`
 
 Default configuration file path: `$env:XMU_ROLLCALL_CONFIG_DIR/config.json` > `~/.xmu_rollcall/config.json` > `./config.json`
 
-You can set the interval for monitoring and waiting time before submitting *(default: 10s)*:
+You can set the interval for monitoring *(default: 10s)*:
 ```jsonc
 {
-  "interval": 8,
-  "delay": 15
+  "interval": 8
 }
 ```
