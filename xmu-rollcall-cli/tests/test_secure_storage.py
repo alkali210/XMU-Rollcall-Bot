@@ -60,6 +60,23 @@ def test_sessions_are_saved_encrypted_in_sqlite(monkeypatch, tmp_path):
     assert restored.cookies.get("sessionid") == "cookie_secret"
 
 
+def test_rollcall_settings_are_persisted_with_encrypted_accounts(monkeypatch, tmp_path):
+    config, _utils = reload_storage(monkeypatch, tmp_path)
+    cfg = {"accounts": [], "current_account_id": None}
+    account_id = config.add_account(cfg, "dave_no", "dave_pw", "Dave")
+    account = config.get_account_by_id(cfg, account_id)
+    config.set_rollcall_settings(account, {"wait_before_answer": "10"})
+    config.save_config(cfg)
+
+    reloaded = config.load_config()
+    reloaded_account = config.get_current_account(reloaded)
+
+    assert config.get_rollcall_settings(reloaded_account)["wait_before_answer"] == 10
+    config_text = (tmp_path / "config.json").read_text(encoding="utf-8")
+    assert "dave_no" not in config_text
+    assert "dave_pw" not in config_text
+
+
 def test_legacy_session_json_is_migrated_and_removed(monkeypatch, tmp_path):
     config, utils = reload_storage(monkeypatch, tmp_path)
     cfg = {"accounts": [], "current_account_id": None}

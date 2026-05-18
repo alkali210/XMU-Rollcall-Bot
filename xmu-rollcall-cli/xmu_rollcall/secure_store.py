@@ -116,10 +116,16 @@ def _connect():
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL DEFAULT '',
             username BLOB NOT NULL,
-            password BLOB NOT NULL
+            password BLOB NOT NULL,
+            rollcall_settings TEXT NOT NULL DEFAULT '{}'
         )
         """
     )
+    account_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(accounts)").fetchall()
+    }
+    if "rollcall_settings" not in account_columns:
+        conn.execute("ALTER TABLE accounts ADD COLUMN rollcall_settings TEXT NOT NULL DEFAULT '{}'")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -136,35 +142,50 @@ def _connect():
 def list_accounts():
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT id, name, username, password FROM accounts ORDER BY id"
+            "SELECT id, name, username, password, rollcall_settings FROM accounts ORDER BY id"
         ).fetchall()
-    return [
-        {
+    accounts = []
+    for row in rows:
+        try:
+            rollcall_settings = json.loads(row[4] or "{}")
+        except ValueError:
+            rollcall_settings = {}
+        accounts.append({
             "id": row[0],
             "name": row[1] or "",
             "username": _decrypt(row[2]),
             "password": _decrypt(row[3]),
-        }
-        for row in rows
-    ]
+            "rollcall_settings": rollcall_settings,
+        })
+    return accounts
+
+
+def _settings_json(account):
+    return json.dumps(
+        account.get("rollcall_settings") or {},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
 
 
 def upsert_account(account):
     with _connect() as conn:
         conn.execute(
             """
-            INSERT INTO accounts (id, name, username, password)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO accounts (id, name, username, password, rollcall_settings)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 username = excluded.username,
-                password = excluded.password
+                password = excluded.password,
+                rollcall_settings = excluded.rollcall_settings
             """,
             (
                 int(account.get("id")),
                 account.get("name") or "",
                 sqlite3.Binary(_encrypt(account.get("username") or "")),
                 sqlite3.Binary(_encrypt(account.get("password") or "")),
+                _settings_json(account),
             ),
         )
 
@@ -184,18 +205,20 @@ def replace_accounts(accounts):
                 conn.execute("DELETE FROM sessions WHERE account_id = ?", (account_id,))
             conn.execute(
                 """
-                INSERT INTO accounts (id, name, username, password)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO accounts (id, name, username, password, rollcall_settings)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     username = excluded.username,
-                    password = excluded.password
+                    password = excluded.password,
+                    rollcall_settings = excluded.rollcall_settings
                 """,
                 (
                     account_id,
                     account.get("name") or "",
                     sqlite3.Binary(_encrypt(username)),
                     sqlite3.Binary(_encrypt(account.get("password") or "")),
+                    _settings_json(account),
                 ),
             )
 

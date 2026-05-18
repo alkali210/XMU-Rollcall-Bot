@@ -47,13 +47,56 @@ DEFAULT_ACCOUNT = {
     "id": 0,
     "name": "",
     "username": "",
-    "password": ""
+    "password": "",
+    "rollcall_settings": {
+        "wait_before_answer": False,
+    },
 }
+
+DEFAULT_ROLLCALL_SETTINGS = DEFAULT_ACCOUNT["rollcall_settings"].copy()
+
+
+def normalize_rollcall_settings(settings):
+    """Return rollcall settings in the current false-or-count format."""
+    merged = DEFAULT_ROLLCALL_SETTINGS.copy()
+    if not settings:
+        return merged
+
+    wait_value = settings.get("wait_before_answer")
+
+    # Compatibility with the previous mode/min/max schema. New config only
+    # stores false or a positive integer, but old config may still be migrated.
+    if wait_value is None:
+        mode = settings.get("wait_before_answer_mode", "none")
+        if mode in ("fixed", "random"):
+            wait_value = settings.get("wait_before_answer_count_min", False)
+
+    if wait_value is False or wait_value is None:
+        merged["wait_before_answer"] = False
+        return merged
+
+    try:
+        wait_count = int(wait_value)
+    except (TypeError, ValueError):
+        wait_count = 0
+
+    merged["wait_before_answer"] = wait_count if wait_count > 0 else False
+    return merged
+
+
+def normalize_account(account):
+    """Return an account with rollcall settings defaults filled in."""
+    account = (account or {}).copy()
+    account["rollcall_settings"] = normalize_rollcall_settings(
+        account.get("rollcall_settings")
+    )
+    return account
+
 
 def _with_stored_accounts(config, accounts):
     """Attach decrypted accounts from SQLite to an in-memory config."""
     config = (config or DEFAULT_CONFIG).copy()
-    config["accounts"] = accounts
+    config["accounts"] = [normalize_account(account) for account in accounts]
     if config.get("current_account_id") is None and accounts:
         config["current_account_id"] = accounts[0].get("id")
     return config
@@ -84,7 +127,8 @@ def load_config():
                                 "id": 1,
                                 "name": "",
                                 "username": old_username,
-                                "password": old_password
+                                "password": old_password,
+                                "rollcall_settings": DEFAULT_ROLLCALL_SETTINGS.copy()
                             }],
                             "current_account_id": 1
                         }
@@ -94,6 +138,7 @@ def load_config():
                     return DEFAULT_CONFIG.copy()
                 legacy_accounts = config.get("accounts", [])
                 if legacy_accounts and any(acc.get("username") or acc.get("password") for acc in legacy_accounts):
+                    legacy_accounts = [normalize_account(acc) for acc in legacy_accounts]
                     secure_store.replace_accounts(legacy_accounts)
                     config["accounts"] = secure_store.list_accounts()
                     save_config(config)
@@ -106,8 +151,9 @@ def load_config():
 def save_config(config):
     """保存配置文件"""
     ensure_config_dir()
-    accounts = config.get("accounts", [])
+    accounts = [normalize_account(account) for account in config.get("accounts", [])]
     if "accounts" in config:
+        config["accounts"] = accounts
         secure_store.replace_accounts(accounts)
     safe_config = {
         key: value
@@ -131,7 +177,8 @@ def add_account(config, username, password, name):
         "id": account_id,
         "name": name,
         "username": username,
-        "password": password
+        "password": password,
+        "rollcall_settings": DEFAULT_ROLLCALL_SETTINGS.copy()
     }
     if "accounts" not in config:
         config["accounts"] = []
@@ -158,6 +205,16 @@ def get_current_account(config):
 def set_current_account(config, account_id):
     """设置当前账号"""
     config["current_account_id"] = account_id
+
+def get_rollcall_settings(account):
+    """Return rollcall settings with defaults filled in."""
+    return normalize_rollcall_settings((account or {}).get("rollcall_settings") or {})
+
+
+def set_rollcall_settings(account, settings):
+    """Persist normalized rollcall settings on an account."""
+    account["rollcall_settings"] = normalize_rollcall_settings(settings or {})
+
 
 def get_all_accounts(config):
     """获取所有账号"""
