@@ -77,6 +77,21 @@ def test_rollcall_settings_are_persisted_with_encrypted_accounts(monkeypatch, tm
     assert "dave_pw" not in config_text
 
 
+def test_obsolete_delay_seconds_config_is_not_saved(monkeypatch, tmp_path):
+    config, _utils = reload_storage(monkeypatch, tmp_path)
+    cfg = {
+        "accounts": [],
+        "current_account_id": None,
+        "interval": 3,
+        "delay": 10,
+    }
+
+    config.save_config(cfg)
+
+    config_json = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
+    assert config_json == {"current_account_id": None, "interval": 3}
+
+
 def test_legacy_session_json_is_migrated_and_removed(monkeypatch, tmp_path):
     config, utils = reload_storage(monkeypatch, tmp_path)
     cfg = {"accounts": [], "current_account_id": None}

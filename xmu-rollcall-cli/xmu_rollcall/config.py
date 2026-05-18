@@ -63,14 +63,6 @@ def normalize_rollcall_settings(settings):
         return merged
 
     wait_value = settings.get("wait_before_answer")
-
-    # Compatibility with the previous mode/min/max schema. New config only
-    # stores false or a positive integer, but old config may still be migrated.
-    if wait_value is None:
-        mode = settings.get("wait_before_answer_mode", "none")
-        if mode in ("fixed", "random"):
-            wait_value = settings.get("wait_before_answer_count_min", False)
-
     if wait_value is False or wait_value is None:
         merged["wait_before_answer"] = False
         return merged
@@ -158,7 +150,7 @@ def save_config(config):
     safe_config = {
         key: value
         for key, value in config.items()
-        if key != "accounts" and key not in {"username", "password"}
+        if key != "accounts" and key not in {"username", "password", "delay"}
     }
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(safe_config, f, indent=2, ensure_ascii=False)
