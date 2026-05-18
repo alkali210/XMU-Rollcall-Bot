@@ -106,17 +106,10 @@ def get_number_rollcall_info(in_session, rollcall_id):
         return None, status, end_time, "Failed to get number code. 'number_code' not found in API response."
     return number_code, status, end_time, None
 
-def send_code(in_session, rollcall_id):
+def submit_number_code(in_session, rollcall_id, number_code, status=None, end_time=None, started_at=None):
     print = log_and_print
     answer_url = f"{base_url}/api/rollcall/{rollcall_id}/answer_number_rollcall"
-    print("Trying number code from API...")
-    t00 = time.time()
-
-    number_code, status, end_time, error = get_number_rollcall_info(in_session, rollcall_id)
-    if error:
-        t01 = time.time()
-        print(f"{error}\nTime: {t01 - t00:.2f} s.")
-        return False
+    t00 = started_at or time.time()
 
     payload = {
         "deviceId": str(uuid.uuid4()),
@@ -126,14 +119,7 @@ def send_code(in_session, rollcall_id):
     try:
         response = in_session.put(answer_url, json=payload, headers=request_headers)
         if response.status_code == 200:
-            print("Number code rollcall answered successfully.\nNumber code: ", number_code)
-            if status or end_time:
-                logger.info(
-                    "Number rollcall API info: rollcall_id=%s status=%s end_time=%s",
-                    rollcall_id,
-                    status,
-                    end_time,
-                )
+            print("Number code rollcall answered successfully.")
             time.sleep(5)
             t01 = time.time()
             print(f"Time: {t01 - t00:.2f} s.")
@@ -145,6 +131,38 @@ def send_code(in_session, rollcall_id):
         t01 = time.time()
         print(f"Failed to submit number code: {e}\nTime: {t01 - t00:.2f} s.")
         return False
+
+def send_code(in_session, rollcall_id, before_submit=None):
+    print = log_and_print
+    print("Trying number code from API...")
+    t00 = time.time()
+
+    number_code, status, end_time, error = get_number_rollcall_info(in_session, rollcall_id)
+    if error:
+        t01 = time.time()
+        print(f"{error}\nTime: {t01 - t00:.2f} s.")
+        return False
+
+    print("Number code obtained from API.")
+    print("Number code: ", number_code)
+    if status or end_time:
+        logger.info(
+            "Number rollcall API info: rollcall_id=%s status=%s end_time=%s",
+            rollcall_id,
+            status,
+            end_time,
+        )
+    if before_submit is not None:
+        before_submit(number_code, status, end_time)
+
+    return submit_number_code(
+        in_session,
+        rollcall_id,
+        number_code,
+        status=status,
+        end_time=end_time,
+        started_at=t00,
+    )
 
 def send_radar(in_session, rollcall_id):
     print = log_and_print

@@ -1,9 +1,12 @@
 import time
 import builtins
 import logging
-from .verify import send_code, send_radar
+from .verify import send_code, send_radar, base_url
+from .config import get_rollcall_settings
 
 logger = logging.getLogger(__name__)
+WAIT_POLL_INTERVAL = 3
+SIGNED_ROLLCALL_STATUS = "on_call_fine"
 
 def log_and_print(*args, **kwargs):
     builtins.print(*args, **kwargs)
@@ -12,10 +15,98 @@ def log_and_print(*args, **kwargs):
     if message:
         logger.info(message)
 
-def process_rollcalls(data, session):
+def _extract_student_rollcalls(payload):
+    if isinstance(payload, dict):
+        students = payload.get("student_rollcalls")
+        if isinstance(students, list):
+            return students
+        nested_data = payload.get("data")
+        if isinstance(nested_data, dict):
+            return _extract_student_rollcalls(nested_data)
+    return []
+
+def _is_signed_student(student):
+    """Return True when Tronclass marks this student as already signed.
+
+    The student_rollcalls API returns every classmate with explicit state
+    fields.  In observed payloads, signed rows look like:
+    ``{"rollcall_status": "on_call_fine", "status": "on_call"}``, while
+    students who have not signed yet during an active rollcall do not need to
+    be inferred from any negative status.  Therefore the wait strategy counts
+    only the positive ``rollcall_status == "on_call_fine"`` signal and must not
+    infer signed state from ``updated_at`` or from ``status``.
+    """
+    if not isinstance(student, dict):
+        return False
+    rollcall_status = str(student.get("rollcall_status") or "").lower()
+    return rollcall_status == SIGNED_ROLLCALL_STATUS
+
+def _count_signed_students(students):
+    """Count classmates who have already signed according to API statuses."""
+    valid_students = [student for student in students if isinstance(student, dict)]
+    count = sum(1 for student in valid_students if _is_signed_student(student))
+    logger.debug(
+        "Signed count by API status: count=%s total=%s",
+        count,
+        len(valid_students),
+    )
+    return count
+
+def _fetch_signed_count(session, rollcall_id):
+    """Query current number of students who have already signed."""
+    try:
+        resp = session.get(
+            f"{base_url}/api/rollcall/{rollcall_id}/student_rollcalls",
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            students = _extract_student_rollcalls(resp.json())
+            return _count_signed_students(students)
+    except Exception as exc:
+        logger.debug("Failed to fetch signed count for rollcall_id=%s: %s", rollcall_id, exc)
+    return None
+
+def _choose_wait_target(settings):
+    wait_value = settings.get("wait_before_answer", False)
+    if wait_value is False:
+        return 0
+    try:
+        wait_count = int(wait_value)
+    except (TypeError, ValueError):
+        return 0
+    return wait_count if wait_count > 0 else 0
+
+def _wait_status_line(count_text, target, number_code=None):
+    code_text = f" | Number code: {number_code}" if number_code else ""
+    return f"\r  Signed: {count_text}/{target}{code_text}"
+
+def wait_for_classmates(session, rollcall_id, settings, number_code=None):
+    """Wait until enough classmates have signed before answering."""
+    print = log_and_print
+    target = _choose_wait_target(settings)
+    if target <= 0:
+        return
+
+    print(f"Waiting for {target} classmate(s) to answer before signing...")
+    if number_code:
+        print(f"Number code: {number_code}")
+    while True:
+        count = _fetch_signed_count(session, rollcall_id)
+        if count is not None:
+            print(_wait_status_line(count, target, number_code), end="", flush=True)
+            if count >= target:
+                print()
+                return
+        else:
+            code_text = f" | Number code: {number_code}" if number_code else ""
+            print(f"\r  Signed: unknown/{target}, retrying...{code_text}", end="", flush=True)
+
+        time.sleep(WAIT_POLL_INTERVAL)
+
+def process_rollcalls(data, session, account=None):
     """处理签到数据"""
     data_empty = {'rollcalls': []}
-    result = handle_rollcalls(data, session)
+    result = handle_rollcalls(data, session, account)
     if False in result:
         return data_empty
     else:
@@ -44,11 +135,12 @@ def extract_rollcalls(data):
         rollcall_count = 0
     return rollcall_count, result
 
-def handle_rollcalls(data, session):
+def handle_rollcalls(data, session, account=None):
     """处理签到流程"""
     print = log_and_print
     count, rollcalls = extract_rollcalls(data)
     answer_status = [False for _ in range(count)]
+    settings = get_rollcall_settings(account or {})
 
     if count:
         print(time.strftime("%H:%M:%S", time.localtime()), f"New rollcall(s) found!\n")
@@ -65,7 +157,10 @@ def handle_rollcalls(data, session):
             print(f"Rollcall type: {temp_str}\n")
 
             if (rollcalls[i]['status'] == 'absent') & (rollcalls[i]['is_number']) & (not rollcalls[i]['is_radar']):
-                if send_code(session, rollcalls[i]['rollcall_id']):
+                def before_submit(_number_code, _status, _end_time, rollcall_id=rollcalls[i]['rollcall_id']):
+                    wait_for_classmates(session, rollcall_id, settings, number_code=_number_code)
+
+                if send_code(session, rollcalls[i]['rollcall_id'], before_submit=before_submit):
                     answer_status[i] = True
                 else:
                     print("Answering failed.")
@@ -73,6 +168,7 @@ def handle_rollcalls(data, session):
                 print("Already answered.")
                 answer_status[i] = True
             elif rollcalls[i]['is_radar']:
+                wait_for_classmates(session, rollcalls[i]['rollcall_id'], settings)
                 if send_radar(session, rollcalls[i]['rollcall_id']):
                     answer_status[i] = True
                 else:
