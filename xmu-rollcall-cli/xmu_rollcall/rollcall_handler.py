@@ -76,7 +76,11 @@ def _choose_wait_target(settings):
         return 0
     return wait_count if wait_count > 0 else 0
 
-def wait_for_classmates(session, rollcall_id, settings):
+def _wait_status_line(count_text, target, number_code=None):
+    code_text = f" | Number code: {number_code}" if number_code else ""
+    return f"\r  Signed: {count_text}/{target}{code_text}"
+
+def wait_for_classmates(session, rollcall_id, settings, number_code=None):
     """Wait until enough classmates have signed before answering."""
     print = log_and_print
     target = _choose_wait_target(settings)
@@ -84,15 +88,18 @@ def wait_for_classmates(session, rollcall_id, settings):
         return
 
     print(f"Waiting for {target} classmate(s) to answer before signing...")
+    if number_code:
+        print(f"Number code: {number_code}")
     while True:
         count = _fetch_signed_count(session, rollcall_id)
         if count is not None:
-            print(f"\r  Signed: {count}/{target}", end="", flush=True)
+            print(_wait_status_line(count, target, number_code), end="", flush=True)
             if count >= target:
                 print()
                 return
         else:
-            print("\r  Signed: unknown, retrying...", end="", flush=True)
+            code_text = f" | Number code: {number_code}" if number_code else ""
+            print(f"\r  Signed: unknown/{target}, retrying...{code_text}", end="", flush=True)
 
         time.sleep(WAIT_POLL_INTERVAL)
 
@@ -151,7 +158,7 @@ def handle_rollcalls(data, session, account=None):
 
             if (rollcalls[i]['status'] == 'absent') & (rollcalls[i]['is_number']) & (not rollcalls[i]['is_radar']):
                 def before_submit(_number_code, _status, _end_time, rollcall_id=rollcalls[i]['rollcall_id']):
-                    wait_for_classmates(session, rollcall_id, settings)
+                    wait_for_classmates(session, rollcall_id, settings, number_code=_number_code)
 
                 if send_code(session, rollcalls[i]['rollcall_id'], before_submit=before_submit):
                     answer_status[i] = True

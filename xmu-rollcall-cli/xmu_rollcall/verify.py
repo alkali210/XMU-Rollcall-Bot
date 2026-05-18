@@ -119,14 +119,7 @@ def submit_number_code(in_session, rollcall_id, number_code, status=None, end_ti
     try:
         response = in_session.put(answer_url, json=payload, headers=request_headers)
         if response.status_code == 200:
-            print("Number code rollcall answered successfully.\nNumber code: ", number_code)
-            if status or end_time:
-                logger.info(
-                    "Number rollcall API info: rollcall_id=%s status=%s end_time=%s",
-                    rollcall_id,
-                    status,
-                    end_time,
-                )
+            print("Number code rollcall answered successfully.")
             time.sleep(5)
             t01 = time.time()
             print(f"Time: {t01 - t00:.2f} s.")
@@ -151,6 +144,14 @@ def send_code(in_session, rollcall_id, before_submit=None):
         return False
 
     print("Number code obtained from API.")
+    print("Number code: ", number_code)
+    if status or end_time:
+        logger.info(
+            "Number rollcall API info: rollcall_id=%s status=%s end_time=%s",
+            rollcall_id,
+            status,
+            end_time,
+        )
     if before_submit is not None:
         before_submit(number_code, status, end_time)
 
