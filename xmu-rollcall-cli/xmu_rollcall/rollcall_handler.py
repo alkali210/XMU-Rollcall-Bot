@@ -1,30 +1,12 @@
 import time
 import builtins
 import logging
-from datetime import datetime, timezone, timedelta
 from .verify import send_code, send_radar, base_url
 from .config import get_rollcall_settings
 
 logger = logging.getLogger(__name__)
 WAIT_POLL_INTERVAL = 3
-SIGNED_STATUSES = {
-    "present",
-    "signed",
-    "success",
-    "on_call_fine",
-    "attended",
-    "late",
-    "已签到",
-    "签到成功",
-}
-SIGNED_TIME_FIELDS = (
-    "answered_at",
-    "submitted_at",
-    "submit_time",
-    "signed_at",
-    "answer_time",
-    "checkin_time",
-)
+SIGNED_ROLLCALL_STATUS = "on_call_fine"
 
 def log_and_print(*args, **kwargs):
     builtins.print(*args, **kwargs)
@@ -43,115 +25,34 @@ def _extract_student_rollcalls(payload):
             return _extract_student_rollcalls(nested_data)
     return []
 
-def _parse_api_time(value):
-    if not value:
-        return None
-    if isinstance(value, (int, float)):
-        try:
-            return datetime.fromtimestamp(value, tz=timezone.utc)
-        except (OverflowError, OSError, ValueError):
-            return None
-
-    text = str(value).strip()
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        # Tronclass is a China campus system; if it ever returns a timestamp
-        # without an offset, treat it as Beijing time rather than UTC.
-        parsed = parsed.replace(tzinfo=timezone(timedelta(hours=8)))
-    return parsed.astimezone(timezone.utc)
-
 def _is_signed_student(student):
-    """Return True for explicit signed signals only.
+    """Return True when Tronclass marks this student as already signed.
 
-    Tronclass also exposes ``updated_at`` on ``student_rollcalls``, but in
-    practice that field may be populated for every roster row as soon as the
-    rollcall is created.  Counting a bare ``updated_at`` therefore causes the
-    "68/10 immediately" false positive seen in the log.  Raw ``updated_at`` is
-    handled separately with safeguards in ``_count_signed_students``.
+    The student_rollcalls API returns every classmate with explicit state
+    fields.  In observed payloads, signed rows look like:
+    ``{"rollcall_status": "on_call_fine", "status": "on_call"}``, while
+    students who have not signed yet during an active rollcall do not need to
+    be inferred from any negative status.  Therefore the wait strategy counts
+    only the positive ``rollcall_status == "on_call_fine"`` signal and must not
+    infer signed state from ``updated_at`` or from ``status``.
     """
     if not isinstance(student, dict):
         return False
-    if any(student.get(field) for field in SIGNED_TIME_FIELDS):
-        return True
-    status = str(student.get("status") or "").lower()
-    return status in SIGNED_STATUSES
+    rollcall_status = str(student.get("rollcall_status") or "").lower()
+    return rollcall_status == SIGNED_ROLLCALL_STATUS
 
-def _updated_at_changed_from_creation(student):
-    updated_at = student.get("updated_at")
-    created_at = student.get("created_at")
-    if not updated_at or not created_at:
-        return False
-
-    updated_dt = _parse_api_time(updated_at)
-    created_dt = _parse_api_time(created_at)
-    if updated_dt and created_dt:
-        return updated_dt > created_dt
-    return str(updated_at) != str(created_at)
-
-def _updated_at_after(student, threshold):
-    if threshold is None or not student.get("updated_at"):
-        return False
-    updated_dt = _parse_api_time(student.get("updated_at"))
-    if updated_dt is None:
-        return False
-    return updated_dt > threshold
-
-def _count_signed_students(students, updated_after=None):
-    """Count classmates who have likely signed.
-
-    The reference project simply counts non-empty ``updated_at`` values.  That
-    fixes Tronclass payloads where signing only changes ``updated_at``, but it
-    overcounts when Tronclass pre-populates ``updated_at`` for every roster row.
-    This implementation keeps the useful part of that strategy while avoiding
-    the unsafe "all rows are already signed" interpretation:
-
-    * explicit signed status/time fields always count;
-    * ``updated_at > created_at`` counts when both fields are present;
-    * while actively waiting, ``updated_at`` after the wait start counts;
-    * as a compatibility fallback, sparse ``updated_at`` values count when not
-      every row has one.
-    """
+def _count_signed_students(students):
+    """Count classmates who have already signed according to API statuses."""
     valid_students = [student for student in students if isinstance(student, dict)]
-    total = len(valid_students)
-    if total == 0:
-        return 0
-
-    explicit_count = sum(1 for student in valid_students if _is_signed_student(student))
-    changed_count = sum(1 for student in valid_students if _updated_at_changed_from_creation(student))
-    after_wait_count = sum(1 for student in valid_students if _updated_at_after(student, updated_after))
-    raw_updated_count = sum(1 for student in valid_students if student.get("updated_at"))
-
-    if after_wait_count:
-        count = max(explicit_count, changed_count, after_wait_count)
-    elif changed_count:
-        count = max(explicit_count, changed_count)
-    elif explicit_count:
-        count = explicit_count
-    elif 0 < raw_updated_count < total:
-        count = raw_updated_count
-    else:
-        count = 0
-
+    count = sum(1 for student in valid_students if _is_signed_student(student))
     logger.debug(
-        "Signed count signals: count=%s total=%s explicit=%s changed_updated_at=%s "
-        "after_wait_updated_at=%s raw_updated_at=%s",
+        "Signed count by API status: count=%s total=%s",
         count,
-        total,
-        explicit_count,
-        changed_count,
-        after_wait_count,
-        raw_updated_count,
+        len(valid_students),
     )
     return count
 
-def _fetch_signed_count(session, rollcall_id, updated_after=None):
+def _fetch_signed_count(session, rollcall_id):
     """Query current number of students who have already signed."""
     try:
         resp = session.get(
@@ -160,7 +61,7 @@ def _fetch_signed_count(session, rollcall_id, updated_after=None):
         )
         if resp.status_code == 200:
             students = _extract_student_rollcalls(resp.json())
-            return _count_signed_students(students, updated_after=updated_after)
+            return _count_signed_students(students)
     except Exception as exc:
         logger.debug("Failed to fetch signed count for rollcall_id=%s: %s", rollcall_id, exc)
     return None
@@ -182,10 +83,9 @@ def wait_for_classmates(session, rollcall_id, settings):
     if target <= 0:
         return
 
-    wait_started_at = datetime.now(timezone.utc)
     print(f"Waiting for {target} classmate(s) to answer before signing...")
     while True:
-        count = _fetch_signed_count(session, rollcall_id, updated_after=wait_started_at)
+        count = _fetch_signed_count(session, rollcall_id)
         if count is not None:
             print(f"\r  Signed: {count}/{target}", end="", flush=True)
             if count >= target:

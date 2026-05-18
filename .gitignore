@@ -7,4 +7,3 @@ legacy/v3.0.1/info.txt
 config.json
 *.log
 *bootstrap*
-tests/
