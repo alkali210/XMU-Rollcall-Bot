@@ -130,12 +130,6 @@ def get_colorful_text(text, color_offset=0):
         for i, char in enumerate(text)
     ) + Colors.ENDC
 
-def print_footer_text(color_offset=0):
-    """打印底部彩色文字"""
-    text = "XMU-Rollcall-Bot @ KrsMt"
-    colored = get_colorful_text(text, color_offset)
-    print(center_text(colored))
-
 def print_dashboard(name, start_time, query_count, banner_frame=0, show_banner=True):
     """打印主仪表板"""
     clear_screen()
@@ -168,10 +162,6 @@ def print_dashboard(name, start_time, query_count, banner_frame=0, show_banner=T
     print(f"{Colors.GRAY}Press Ctrl+C to exit{Colors.ENDC}\n")
     print_separator()
 
-    if show_banner:
-        print()
-        print_footer_text(banner_frame)
-
 def print_login_status(message, is_success=True):
     """打印登录状态"""
     if is_success:
@@ -199,7 +189,7 @@ def update_status_line(line_num, label, value, color):
 
 def update_footer_text():
     """更新底部彩色文字，不清屏"""
-    text = "XMU-Rollcall-Bot @ KrsMt"
+    text = "XMU-Rollcall-Bot @ KrsMt , Revision @ alkali210"
     colored = get_colorful_text(text, 0)
     width = get_terminal_width()
 

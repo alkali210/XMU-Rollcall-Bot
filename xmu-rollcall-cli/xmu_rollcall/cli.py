@@ -45,7 +45,7 @@ def cli(ctx):
 
 @cli.command()
 def config():
-    """Configure accounts and rollcall settings."""
+    """配置账号和签到设置"""
     click.echo(f"\n{Colors.BOLD}{Colors.OKCYAN}=== XMU Rollcall Configuration ==={Colors.ENDC}\n")
 
     current_config = load_config()
@@ -258,12 +258,12 @@ def start():
 
 @cli.command()
 def refresh():
-    """æ¸…é™¤å½“å‰è´¦å·çš„ç™»å½•ç¼“å­˜"""
+    """刷新登录状态"""
     config_data = load_config()
     current_account = get_current_account(config_data)
 
     if not current_account:
-        click.echo(f"{Colors.FAIL}âœ— No account configured!{Colors.ENDC}")
+        click.echo(f"{Colors.FAIL}No account configured!{Colors.ENDC}")
         click.echo(f"Please run: {Colors.BOLD}xmurollcall-cli config{Colors.ENDC}")
         sys.exit(1)
 
