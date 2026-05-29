@@ -1,9 +1,11 @@
 
 # XMU Rollcall Bot
 
+> This project is forked from [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot).
+
 Automatic Check-In Program for XMU(Tronclass), **Intended for educational and research purposes only.**
 
-## Features
+## Overview
 - Monitor rollcall status in real-time
 - Perform rollcall automatically:
   - Number rollcall: get number code from API
@@ -12,7 +14,7 @@ Automatic Check-In Program for XMU(Tronclass), **Intended for educational and re
 - Supports multiple accounts, stores encrypted account informations and sessions in sqlite
 - Using a log file to record the rollcall status
 
-This project is based on version 3.4.1 of [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot).
+Based on version 3.4.1 of [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot).
 
 ## Installation
 
