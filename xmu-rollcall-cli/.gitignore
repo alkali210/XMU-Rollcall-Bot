@@ -45,13 +45,6 @@ cookies.json
 config.json
 info.txt
 
-# PyPI
-.pypirc
-*.whl
-*.tar.gz
-.eggs/
-dist-*/
-
 # Testing
 .tox/
 .coverage
@@ -62,6 +55,4 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
-pypiptoken.md
-
 
