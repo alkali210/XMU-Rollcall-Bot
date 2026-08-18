@@ -1,0 +1,56 @@
+name: Upload Python Package
+
+on:
+    push:
+        tags:
+            - "v*"
+
+permissions:
+    contents: read
+
+jobs:
+    release-build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v6
+
+            - uses: actions/setup-python@v6
+              with:
+                  python-version: "3.x"
+
+            - name: Build release distributions
+              run: |
+                  cd xmu-rollcall-cli
+                  python -m pip install build
+                  python -m build
+
+            - name: Upload distributions
+              uses: actions/upload-artifact@v4
+              with:
+                  name: release-dists
+                  path: xmu-rollcall-cli/dist/
+
+    github-release:
+        needs: release-build
+        runs-on: ubuntu-latest
+
+        permissions:
+            contents: write
+
+        steps:
+            - name: Download distributions
+              uses: actions/download-artifact@v5
+              with:
+                  name: release-dists
+                  path: dist
+
+            - name: Create GitHub Release
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  gh release create "${{ github.ref_name }}" \
+                  dist/* \
+                  --title "${{ github.ref_name }}" \
+                  --notes ""
+                  --verify-tag
