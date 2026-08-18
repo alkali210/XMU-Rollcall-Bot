@@ -1,6 +1,6 @@
 # XMU Rollcall Bot
 
-[English](README.md) | **简体中文**
+[English](README-en.md) | **简体中文**
 
 > 本项目 fork 自 [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot)。
 
@@ -20,18 +20,26 @@
 
 ## 安装
 
-### 全局安装
-
-```bash
-pip install -e xmu-rollcall-cli
-```
-
 ### 虚拟环境（使用 uv）
 
 在 `xmu-rollcall-cli` 目录中执行：
 
 ```bash
 uv sync
+```
+
+### 全局安装 （从源码）
+
+```bash
+git clone --depth 1 -b main https://github.com/alkali210/XMU-Rollcall-Bot.git
+cd XMU-Rollcall-Bot
+pip install -e xmu-rollcall-cli
+```
+
+### 全局安装 （从 wheel）
+
+```bash
+pip install xmu_rollcall_cli-3.4.1.4-py3-none-any.whl # 从 releases 下载
 ```
 
 ## 使用
@@ -65,6 +73,6 @@ uv run xmurollcall-cli <command> # 如果使用 uv
 
 ### 等待同学签到
 
-在配置菜单中按 `s`（编辑签到设置），设置提交签到前等待的同学签到人数。
+在配置菜单中按 `s`（Edit rollcall settings），设置提交签到前等待的同学签到人数。
 
 > 可以随时按 `Ctrl + C` 中止配置。

@@ -1,6 +1,6 @@
 # XMU Rollcall Bot
 
-**English** | [简体中文](README-zh.md)
+**English** | [简体中文](README.md)
 
 > This project is forked from [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot).
 
@@ -20,18 +20,26 @@ Based on version 3.4.1 of [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt
 
 ## Installation
 
-### Global installation
-
-```bash
-pip install -e xmu-rollcall-cli
-```
-
 ### Virtual environment (using uv)
 
 Run the following command from the `xmu-rollcall-cli` directory:
 
 ```bash
 uv sync
+```
+
+### Global installation (from source)
+
+```bash
+git clone --depth 1 -b main https://github.com/alkali210/XMU-Rollcall-Bot.git
+cd XMU-Rollcall-Bot
+pip install -e xmu-rollcall-cli
+```
+
+### Global installation (from wheel)
+
+```bash
+pip install xmu_rollcall_cli-3.4.1.4-py3-none-any.whl # download from releases
 ```
 
 ## Usage
