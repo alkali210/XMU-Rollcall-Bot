@@ -1,61 +1,61 @@
 # XMU Rollcall Bot
 
-**English** | [简体中文](README-zh.md)
+[English](README.md) | **简体中文**
 
-> This project is forked from [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot).
+> 本项目 fork 自 [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot)。
 
-Automatic Check-In Program for XMU(Tronclass), **Intended for educational and research purposes only.**
+厦门大学（Tronclass）自动签到程序，**仅供学习研究使用**
 
-## Overview
+## 概览
 
-- Monitor rollcall status in real-time
-- Perform rollcall automatically:
-  - Number rollcall: get number code from API
-  - Radar rollcall: solve the location using two points
-- Supports waiting until a certain number of classmates have checked in before submitting
-- Supports multiple accounts, stores encrypted account informations and sessions in sqlite
-- Record the rollcall status in a log file
+- 实时监控签到状态
+- 自动完成签到：
+  - 数字签到：从 API 获取数字码
+  - 雷达签到：使用两个位置点求解签到位置
+- 支持等待指定数量的同学完成签到后再提交
+- 支持多账号，并在 SQLite 中加密存储账号信息和会话
+- 在日志文件中记录签到状态
 
-Based on version 3.4.1 of [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot).
+基于 [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot) 的 3.4.1 版本。
 
-## Installation
+## 安装
 
-### Global installation
+### 全局安装
 
 ```bash
 pip install -e xmu-rollcall-cli
 ```
 
-### Virtual environment (using uv)
+### 虚拟环境（使用 uv）
 
-Run the following command from the `xmu-rollcall-cli` directory:
+在 `xmu-rollcall-cli` 目录中执行：
 
 ```bash
 uv sync
 ```
 
-## Usage
+## 使用
 
 ```bash
-xmurollcall-cli config  # configure your account. support multiple accounts
-xmurollcall-cli switch  # switch between accounts
-xmurollcall-cli start   # start the monitor
-xmurollcall-cli refresh # refresh login status
+xmurollcall-cli config  # 配置账号，支持多账号
+xmurollcall-cli switch  # 切换账号
+xmurollcall-cli start   # 启动监控
+xmurollcall-cli refresh # 刷新登录状态
 
-uv run xmurollcall-cli <command> # if using uv
+uv run xmurollcall-cli <command> # 如果使用 uv
 ```
 
-See log at `XMU_ROLLCALL_CONFIG_DIR/xmu_rollcall.log`
+日志文件位于 `XMU_ROLLCALL_CONFIG_DIR/xmu_rollcall.log`。
 
-> Currently unable to resolve the QR code rollcall, when a QR code rollcall is detected, the monitor will pause for 5 minutes to prevent repeated requests within a short period of time.
+> 目前无法处理二维码签到，检测到二维码签到时，监控程序将暂停 5 分钟，以防止短时间内重复请求。
 
-## Configuration
+## 配置
 
-### Interval for monitoring
+### 监控间隔
 
-Default configuration file path: `XMU_ROLLCALL_CONFIG_DIR/config.json` > `~/.xmu_rollcall/config.json` > `./xmu-rollcall-cli/config.json`
+默认配置文件路径优先级：`XMU_ROLLCALL_CONFIG_DIR/config.json` > `~/.xmu_rollcall/config.json` > `./xmu-rollcall-cli/config.json`
 
-You can set the interval for monitoring *(default: 10s)*, it will apply to all accounts:
+可以设置监控间隔，对所有账号生效（默认：10 秒）：
 
 ```jsonc
 {
@@ -63,8 +63,8 @@ You can set the interval for monitoring *(default: 10s)*, it will apply to all a
 }
 ```
 
-### Waiting for classmates
+### 等待同学签到
 
-Press `s` (Edit rollcall settings) in configuration menu to set the number of classmates to wait for before submitting the rollcall.
+在配置菜单中按 `s`（编辑签到设置），设置提交签到前等待的同学签到人数。
 
-> You can press `Ctrl + C` to abort configuration at any time.
+> 可以随时按 `Ctrl + C` 中止配置。
