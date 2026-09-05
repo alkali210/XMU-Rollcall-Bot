@@ -74,14 +74,23 @@ Logs are stored as `xmu_rollcall.log` in the configuration directory.
 
 The configuration directory is selected from `XMU_ROLLCALL_CONFIG_DIR`, then `~/.xmu_rollcall`, falling back to `.xmu_rollcall` in the current directory when the home directory is not writable. On Windows the default is `%USERPROFILE%\.xmu_rollcall`. The EXE and Python versions use the same rules. This directory contains `config.json`, `secure_store.sqlite3`, `secret.key`, and logs; runtime data is not bundled into the EXE.
 
-You can set the interval for monitoring *(default: 10s)*, it will apply to all accounts:
+Press `i` in the configuration menu to set the polling interval (positive seconds, default: 10s) for all accounts. You can also edit `config.json`; changes apply on the next monitoring run:
 
 ```jsonc
 {
-  "interval": 15
+  "interval": 15,
+  "current_account_id": 1,
+  "accounts": [
+    {"id": 1, "rollcall_settings": {"wait_before_answer": 5}},
+    {"id": 2, "rollcall_settings": {"wait_before_answer": false}}
+  ]
 }
 ```
 
 ### Waiting for classmates
 
 Press `s` (Edit rollcall settings) in configuration menu to set the number of classmates to wait for before submitting the rollcall.
+
+These settings live in the `accounts` list in `config.json`, matched to the account IDs shown in the TUI. Use a positive integer to wait or `false` to disable waiting. Both editing methods use the same configuration. Keep the actual account IDs and use the TUI to add or delete accounts.
+
+Credentials and sessions remain in encrypted SQLite storage. Existing database settings migrate automatically on first run; JSON settings take precedence, and legacy database settings are cleared only after a successful JSON write. Exit the configuration menu before editing the file manually.

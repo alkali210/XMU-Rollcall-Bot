@@ -68,14 +68,23 @@ uv run xmurollcall-cli <command> # 如果使用 uv
 
 配置目录优先使用环境变量 `XMU_ROLLCALL_CONFIG_DIR`，否则使用 `~/.xmu_rollcall`；用户目录不可写时使用当前目录下的 `.xmu_rollcall`。Windows 默认位置为 `%USERPROFILE%\.xmu_rollcall`，EXE 和 Python 版使用相同规则。目录内包含 `config.json`、`secure_store.sqlite3`、`secret.key` 和日志文件；这些运行数据不打包进 EXE。
 
-可以设置监控间隔，对所有账号生效（默认：10 秒）：
+在配置菜单中按 `i` 设置监控间隔，对所有账号生效（默认：10 秒，支持正数秒值）。也可以直接编辑 `config.json`，下次启动监控时生效：
 
 ```jsonc
 {
-  "interval": 15
+  "interval": 15,
+  "current_account_id": 1,
+  "accounts": [
+    {"id": 1, "rollcall_settings": {"wait_before_answer": 5}},
+    {"id": 2, "rollcall_settings": {"wait_before_answer": false}}
+  ]
 }
 ```
 
 ### 等待同学签到
 
 在配置菜单中按 `s`（Edit rollcall settings），设置提交签到前等待的同学签到人数。
+
+等待人数保存在 `config.json` 的 `accounts` 列表中，通过 `id` 对应 TUI 中的账号；正整数表示等待人数，`false` 表示不等待。TUI 修改与手动编辑使用同一份配置。请保留实际账号的 ID，账号增删仍通过 TUI 操作。
+
+账号密码和会话仍保存在加密 SQLite 中，不写入 JSON。首次运行自动迁移数据库中的旧等待设置；JSON 中已有的设置优先，写入成功后清空数据库中的旧设置。手动编辑请在退出配置菜单后进行。

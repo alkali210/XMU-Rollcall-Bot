@@ -9,12 +9,11 @@ from rich.live import Live
 from .logging_config import setup_logging
 from .utils import save_session, load_session, verify_session
 from .rollcall_handler import process_rollcalls
-from .config import get_cookies_path, load_config, has_saved_session
+from .config import get_cookies_path, load_config, has_saved_session, get_interval, DEFAULT_INTERVAL
 
 logger = logging.getLogger(__name__)
 
 base_url = "https://lnt.xmu.edu.cn"
-DEFAULT_INTERVAL = 10
 interval = DEFAULT_INTERVAL
 headers = {
     "User-Agent": (
@@ -51,20 +50,10 @@ GREEN_TEXT = f"{Colors.OKGREEN}"
 YELLOW_TEXT = f"{Colors.WARNING}"
 END = Colors.ENDC
 
-def _coerce_number(value, default):
-    if value is None or isinstance(value, bool):
-        return default
-    if isinstance(value, (int, float)):
-        return value
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
 def _load_monitor_settings():
     """Load monitor polling interval from config."""
     config = load_config()
-    return _coerce_number(config.get("interval"), DEFAULT_INTERVAL)
+    return get_interval(config)
 
 def clear_screen():
     if tui.console.is_terminal:

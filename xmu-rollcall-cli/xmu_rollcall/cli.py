@@ -1,5 +1,6 @@
 import click
 import logging
+import math
 import sys
 from . import tui
 from xmulogin import xmulogin
@@ -7,7 +8,7 @@ from .config import (
     load_config, save_config, is_config_complete, get_cookies_path,
     add_account, get_all_accounts, get_current_account, set_current_account,
     get_account_by_id, CONFIG_FILE, delete_account, perform_account_deletion,
-    delete_saved_session, get_rollcall_settings, set_rollcall_settings
+    delete_saved_session, get_rollcall_settings, set_rollcall_settings, get_interval
 )
 from .logging_config import setup_logging
 from .monitor import start_monitor, base_url, headers
@@ -204,20 +205,36 @@ def config():
         saved_text = "false" if saved is False else str(saved)
         tui.echo(f"{Colors.OKGREEN}Settings saved. wait_before_answer = {saved_text}{Colors.ENDC}\n")
 
+    def edit_interval():
+        while True:
+            value = tui.prompt("Polling interval (seconds)", type=float,
+                               default=get_interval(current_config))
+            if math.isfinite(value) and value > 0:
+                break
+            tui.echo("Invalid interval. Enter a finite number greater than zero.")
+        current_config["interval"] = value
+        save_config(current_config)
+        tui.echo(f"Polling interval saved: {value:g}s (all accounts).")
+
     while True:
-        tui.console.print(tui.frame(tui.sections(
+        tui.console.print(tui.frame(tui.Group(tui.sections(
             tui.accounts_panel(get_all_accounts(current_config),
                                get_current_account(current_config), get_rollcall_settings),
             tui.panel(tui.menu_rows([
                 ("n", "Add new account"), ("d", "Delete account"),
-                ("s", "Edit rollcall settings"), ("q", "Return / quit")]),
-                "Actions", "blue")), "Configuration"))
+                ("s", "Edit rollcall settings"),
+                ("i", f"Polling interval: {get_interval(current_config):g}s (all accounts)")]),
+                "Actions", "blue")),
+            tui.Text(f"Configuration file: {CONFIG_FILE.resolve()}", style="dim")),
+            "Configuration", subtitle="Ctrl+C to return"))
 
-        action = tui.prompt(
-            f"\n{Colors.BOLD}Action{Colors.ENDC}",
-            type=click.Choice(['n', 'd', 's', 'q'], case_sensitive=False),
-            default='q',
-        )
+        try:
+            action = tui.prompt(
+                f"\n{Colors.BOLD}Action{Colors.ENDC}",
+                type=click.Choice(['n', 'd', 's', 'i'], case_sensitive=False),
+            )
+        except (click.Abort, KeyboardInterrupt):
+            return
         tui.echo()
 
         if action.lower() == 'n':
@@ -226,13 +243,8 @@ def config():
             delete_existing_account()
         elif action.lower() == 's':
             edit_account_settings()
-        elif action.lower() == 'q':
-            accounts = get_all_accounts(current_config)
-            if accounts:
-                show_accounts()
-                tui.echo(f"\n{Colors.GRAY}You can run: {Colors.BOLD}xmurollcall-cli switch{Colors.ENDC} to switch between accounts")
-                tui.echo(f"{Colors.GRAY}You can run: {Colors.BOLD}xmurollcall-cli start{Colors.ENDC} to start monitoring")
-            break
+        elif action.lower() == 'i':
+            edit_interval()
 
 @cli.command()
 def start():

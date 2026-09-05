@@ -35,9 +35,12 @@ class TerminalTests(unittest.TestCase):
                 self.assertEqual(result.output.count("Welcome back"), 2)
 
     def test_config_returns_to_launcher(self):
-        result = self.invoke(input="config\nq\n")
+        result = self.invoke(input="config\n")
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("Configuration", result.output)
+        self.assertIn("Configuration file:", result.output)
+        self.assertIn("Ctrl+C to return", result.output)
+        self.assertNotIn("Return / quit", result.output)
         self.assertEqual(result.output.count("Welcome back"), 2)
 
     def test_direct_command_keeps_failure_exit_code(self):
