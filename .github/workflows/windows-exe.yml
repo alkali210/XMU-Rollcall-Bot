@@ -4,7 +4,7 @@ on:
   workflow_call:
   workflow_dispatch:
   push:
-    branches: [main, feat/tui]
+    branches: [main, alpha]
     paths:
       - "xmu-rollcall-cli/**"
       - ".github/workflows/windows-exe.yml"
