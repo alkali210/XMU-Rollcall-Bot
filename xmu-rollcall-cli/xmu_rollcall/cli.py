@@ -239,14 +239,10 @@ def config():
             tui.Text(f"Configuration file: {CONFIG_FILE.resolve()}", style="dim")),
             "Configuration", subtitle="Ctrl+C to return"))
 
-        try:
-            action = tui.prompt(
-                f"\n{Colors.BOLD}Action{Colors.ENDC}",
-                type=click.Choice(['n', 'd', 's', 'i'], case_sensitive=False),
-            )
-        except (click.Abort, KeyboardInterrupt):
-            return
-        tui.echo()
+        action = tui.prompt(
+            f"{Colors.BOLD}Action{Colors.ENDC}",
+            type=click.Choice(['n', 'd', 's', 'i'], case_sensitive=False),
+        )
 
         if action.lower() == 'n':
             add_new_account()
