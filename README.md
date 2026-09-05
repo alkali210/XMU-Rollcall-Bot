@@ -24,8 +24,7 @@
 <img src="screenshots/2.png" alt="screenshot_2" width="100%">
 </details>
 
-<br>
-基于 [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot) 的 3.4.1 版本。
+> 基于 ![KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot) 的 3.4.1 版本。
 
 ## 安装
 
