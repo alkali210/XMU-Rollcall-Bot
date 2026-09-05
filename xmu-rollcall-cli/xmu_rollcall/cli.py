@@ -267,7 +267,7 @@ def start():
     # 检查配置是否完整
     if not is_config_complete(config_data):
         tui.echo(f"{Colors.FAIL}✗ Configuration incomplete!{Colors.ENDC}")
-        tui.echo(f"Please run: {Colors.BOLD}xmurollcall-cli config{Colors.ENDC}")
+        tui.echo(f"Please run: {Colors.BOLD}xmu-rollcall config{Colors.ENDC}")
         sys.exit(1)
 
     # 获取当前账号
@@ -295,7 +295,7 @@ def refresh():
 
     if not current_account:
         tui.echo(f"{Colors.FAIL}No account configured!{Colors.ENDC}")
-        tui.echo(f"Please run: {Colors.BOLD}xmurollcall-cli config{Colors.ENDC}")
+        tui.echo(f"Please run: {Colors.BOLD}xmu-rollcall config{Colors.ENDC}")
         sys.exit(1)
 
     account_id = current_account.get("id")
@@ -324,7 +324,7 @@ def switch():
 
     if not accounts:
         tui.echo(f"{Colors.FAIL}✗ No accounts configured!{Colors.ENDC}")
-        tui.echo(f"Please run: {Colors.BOLD}xmurollcall-cli config{Colors.ENDC}")
+        tui.echo(f"Please run: {Colors.BOLD}xmu-rollcall config{Colors.ENDC}")
         sys.exit(1)
 
     tui.console.print(tui.frame(tui.accounts_panel(
@@ -344,7 +344,7 @@ def switch():
         set_current_account(config_data, selected_id)
         save_config(config_data)
         tui.echo(f"\n{Colors.OKGREEN}✓ Switched to account: {selected_account.get('name') or selected_account.get('username')} (ID: {selected_id}){Colors.ENDC}")
-        tui.echo(f"{Colors.GRAY}You can now run: {Colors.BOLD}xmurollcall-cli start{Colors.ENDC}")
+        tui.echo(f"{Colors.GRAY}You can now run: {Colors.BOLD}xmu-rollcall start{Colors.ENDC}")
     else:
         tui.echo(f"{Colors.FAIL}✗ Account not found!{Colors.ENDC}")
         sys.exit(1)

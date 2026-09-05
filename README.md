@@ -30,7 +30,7 @@
 
 ### Windows 单文件 EXE
 
-双击 `xmurollcall-cli.exe` 进入交互菜单，无需安装 Python。
+发布的 EXE 文件名包含包版本号，例如 `xmu-rollcall-3.4.2.0a0.exe`。双击该文件 进入交互菜单，无需安装 Python。
 
 ### 全局安装 （从源码）
 
@@ -50,17 +50,18 @@ uv sync
 
 ## 使用
 
-不带参数运行 `xmurollcall-cli` 即可进入交互菜单，按 `Ctrl-C` 退出。
+不带参数运行 `xmu-rollcall` 即可进入交互菜单，按 `Ctrl-C` 退出。
 原有带参数命令仍可直接使用：
 
 ```bash
-xmurollcall-cli        # 打开交互菜单
-xmurollcall-cli config  # 配置账号，支持多账号
-xmurollcall-cli switch  # 切换账号
-xmurollcall-cli start   # 启动监控
-xmurollcall-cli refresh # 刷新登录状态
+xmu-rollcall         # 打开交互菜单
+xmu-rollcall config  # 配置账号，支持多账号
+xmu-rollcall switch  # 切换账号
+xmu-rollcall start   # 启动监控
+xmu-rollcall refresh # 刷新登录状态
 
-uv run xmurollcall-cli <command> # 如果使用 uv
+uv run xmu-rollcall           # 使用 uv 打开交互菜单
+uv run xmu-rollcall <command> # 使用 uv 执行子命令
 ```
 
 `refresh` 会清除当前账号的已保存登录会话，下次启动监控时重新登录。监控界面显示当前时间、运行时长、查询次数及监控间隔，按 `Ctrl-C` 清屏并显示退出统计。

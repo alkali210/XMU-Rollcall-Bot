@@ -54,7 +54,7 @@ jobs:
             - name: Download Windows executable
               uses: actions/download-artifact@v5
               with:
-                  name: xmurollcall-cli-windows-x64
+                  name: xmu-rollcall-windows-x64
                   path: dist
 
             - name: Create GitHub Release

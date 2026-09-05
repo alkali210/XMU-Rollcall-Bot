@@ -23,13 +23,13 @@ Based on version 3.4.1 of [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt
 
 ### Windows single-file EXE
 
-Download `xmurollcall-cli.exe` from **Releases**, alongside the Python wheel and source distribution, and double-click it to open the menu. Python is not required.
+Download the versioned EXE (for example, `xmu-rollcall-3.4.2.0a0.exe`) from **Releases**, alongside the Python wheel and source distribution, and double-click it to open the menu. Python is not required.
 Subcommands also work from PowerShell:
 
 ```powershell
-.\xmurollcall-cli.exe
-.\xmurollcall-cli.exe config
-.\xmurollcall-cli.exe start
+.\xmu-rollcall-3.4.2.0a0.exe
+.\xmu-rollcall-3.4.2.0a0.exe config
+.\xmu-rollcall-3.4.2.0a0.exe start
 ```
 
 ### Global installation (from source)
@@ -50,16 +50,17 @@ uv sync
 
 ## Usage
 
-Run `xmurollcall-cli` without arguments to open the Rich interactive menu. Enter `1`–`4` or `config` / `switch` / `start` / `refresh`, and press `Ctrl-C` to exit. Configuration, account switching, and session refresh return to the menu after completion. After selecting `start`, pressing `Ctrl-C` exits the application directly. Existing subcommands still work directly. Panels adapt to the terminal width.
+Run `xmu-rollcall` without arguments to open the Rich interactive menu. Enter `1`–`4` or `config` / `switch` / `start` / `refresh`, and press `Ctrl-C` to exit. Configuration, account switching, and session refresh return to the menu after completion. After selecting `start`, pressing `Ctrl-C` exits the application directly. Existing subcommands still work directly. Panels adapt to the terminal width.
 
 ```bash
-xmurollcall-cli        # open the interactive menu
-xmurollcall-cli config  # configure your account. support multiple accounts
-xmurollcall-cli switch  # switch between accounts
-xmurollcall-cli start   # start the monitor
-xmurollcall-cli refresh # refresh login status
+xmu-rollcall         # open the interactive menu
+xmu-rollcall config  # configure your account. support multiple accounts
+xmu-rollcall switch  # switch between accounts
+xmu-rollcall start   # start the monitor
+xmu-rollcall refresh # refresh login status
 
-uv run xmurollcall-cli <command> # if using uv
+uv run xmu-rollcall           # open the interactive menu with uv
+uv run xmu-rollcall <command> # run a subcommand with uv
 ```
 
 `refresh` clears the current account's saved login session; the next monitoring run logs in again. The monitor shows the current time, uptime, query count, and polling interval. Pressing `Ctrl+C` clears the screen and displays exit statistics.
