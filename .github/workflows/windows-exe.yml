@@ -26,9 +26,11 @@ jobs:
         working-directory: xmu-rollcall-cli
     env:
       PYTHONUTF8: "1"
-      XMU_ROLLCALL_CONFIG_DIR: ${{ runner.temp }}/xmu-rollcall-build-config
     steps:
       - uses: actions/checkout@v6
+      - name: Configure build config directory
+        run: |
+          "XMU_ROLLCALL_CONFIG_DIR=$env:RUNNER_TEMP/xmu-rollcall-build-config" >> $env:GITHUB_ENV
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
