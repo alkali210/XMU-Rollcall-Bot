@@ -15,8 +15,16 @@
 - 支持等待指定数量的同学完成签到后再提交
 - 支持多账号，并在 SQLite 中加密存储账号信息和会话
 - 在日志文件中记录签到状态
-- 美观的交互界面
+- 更友好的交互界面
 
+<details>
+<summary>运行截图</summary>
+<img src="screenshots/1.png" alt="screenshot_1" width="100%">
+<br><br>
+<img src="screenshots/2.png" alt="screenshot_2" width="100%">
+</details>
+
+<br>
 基于 [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot) 的 3.4.1 版本。
 
 ## 安装
@@ -66,7 +74,7 @@ uv run xmurollcall-cli <command> # 如果使用 uv
 
 ### 监控间隔
 
-配置目录优先使用环境变量 `XMU_ROLLCALL_CONFIG_DIR`，否则使用 `~/.xmu_rollcall`；用户目录不可写时使用当前目录下的 `.xmu_rollcall`。Windows 默认位置为 `%USERPROFILE%\.xmu_rollcall`，EXE 和 Python 版使用相同规则。目录内包含 `config.json`、`secure_store.sqlite3`、`secret.key` 和日志文件；这些运行数据不打包进 EXE。
+配置目录优先使用环境变量 `XMU_ROLLCALL_CONFIG_DIR`，否则使用 `~/.xmu_rollcall`；用户目录不可写时使用当前目录下的 `.xmu_rollcall`。
 
 在配置菜单中按 `i` 设置监控间隔，对所有账号生效（默认：10 秒，支持正数秒值）。也可以直接编辑 `config.json`，下次启动监控时生效：
 
@@ -83,10 +91,8 @@ uv run xmurollcall-cli <command> # 如果使用 uv
 
 ### 等待同学签到
 
-在配置菜单中按 `s`（Edit rollcall settings），设置提交签到前等待的同学签到人数。
+在配置菜单中按 `s`，设置提交签到前等待的同学签到人数。
 
 等待人数保存在 `config.json` 的 `accounts` 列表中，通过 `id` 对应 TUI 中的账号；正整数表示等待人数，`false` 表示不等待。TUI 修改与手动编辑使用同一份配置。请保留实际账号的 ID，账号增删仍通过 TUI 操作。
 
-也支持按比例等待：在 TUI 的 `s` 菜单输入 `20%`，或在 JSON 中设置 `"wait_before_answer": "20%"`。支持大于 0%、不超过 100% 的百分比（可含小数）。分母为接口返回的学生名单总人数，目标人数向上取整，例如 6 人的 20% 需要至少 2 人签到。仅将 `rollcall_status == "on_call_fine"` 计为已签到；名单为空、缺失或格式异常时继续等待。新账号或未配置该项时默认等待 `10%`，已有的明确设置保持不变。
-
-账号密码和会话仍保存在加密 SQLite 中，不写入 JSON。首次运行自动迁移数据库中的旧等待设置；JSON 中已有的设置优先，写入成功后清空数据库中的旧设置。手动编辑请在退出配置菜单后进行。
+也支持按比例等待：在 TUI 的 `s` 菜单输入 `20%`，或在 JSON 中设置 `"wait_before_answer": "20%"`。支持大于 0%、不超过 100% 的百分比（可含小数）。分母为接口返回的学生名单总人数，目标人数向上取整。
