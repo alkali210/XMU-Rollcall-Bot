@@ -102,6 +102,14 @@ class ConfigTests(unittest.TestCase):
         for value in (None, True, 0, -1, "bad", "nan", "inf"):
             self.assertEqual(config.get_interval({"interval": value}), 10)
 
+    def test_percentage_menu_round_trip(self):
+        self.seed()
+        with patch("xmu_rollcall.cli.setup_logging"):
+            result = CliRunner().invoke(cli, ["config"], input="s\n1\n20%\n")
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertEqual(config.load_config()["accounts"][0]["rollcall_settings"]["wait_before_answer"], "20.0%")
+        self.assertIn("20.0% of students", result.output)
+
 
 if __name__ == "__main__":
     unittest.main()

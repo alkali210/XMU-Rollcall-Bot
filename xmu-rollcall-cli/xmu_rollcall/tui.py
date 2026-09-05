@@ -68,7 +68,9 @@ def accounts_panel(accounts, current, settings):
         wait = settings(account).get("wait_before_answer")
         table.add_row(str(account.get("id")),
                       Text(account.get("name") or account.get("username") or ""),
-                      "no wait" if wait is False else f"{wait} classmates",
+                      ("no wait" if wait is False else
+                       f"{wait} of students" if isinstance(wait, str) and wait.endswith("%")
+                       else f"{wait} classmates"),
                       "current" if current and account.get("id") == current.get("id") else "")
     return panel(table if accounts else Text("No accounts configured.", style="dim"), "Accounts")
 

@@ -1,6 +1,7 @@
 import click
 import logging
 import math
+from decimal import Decimal, InvalidOperation
 import sys
 from . import tui
 from xmulogin import xmulogin
@@ -181,6 +182,7 @@ def config():
         tui.echo("Set wait_before_answer:")
         tui.echo("  false  - do not wait after getting the number code")
         tui.echo("  number - wait until that many classmates have signed")
+        tui.echo("  20%    - wait until that percentage of students has signed")
 
         raw_value = tui.prompt(
             f"{Colors.BOLD}wait_before_answer{Colors.ENDC}",
@@ -190,11 +192,20 @@ def config():
 
         if raw_value in ("false", "f", "no", "n", "0", "off", ""):
             wait_before_answer = False
+        elif raw_value.endswith("%"):
+            try:
+                percentage = Decimal(raw_value[:-1])
+                if not percentage.is_finite() or not 0 < percentage <= 100:
+                    raise ValueError
+            except (InvalidOperation, ValueError):
+                tui.echo("Invalid percentage. Use a value greater than 0% and at most 100%.")
+                return
+            wait_before_answer = raw_value
         else:
             try:
                 wait_before_answer = int(raw_value)
             except ValueError:
-                tui.echo(f"{Colors.FAIL}Invalid value. Use false or a positive number.{Colors.ENDC}\n")
+                tui.echo(f"{Colors.FAIL}Invalid value. Use false, a positive integer, or 20%.{Colors.ENDC}\n")
                 return
             if wait_before_answer <= 0:
                 wait_before_answer = False

@@ -64,7 +64,7 @@ DEFAULT_ACCOUNT = {
     "username": "",
     "password": "",
     "rollcall_settings": {
-        "wait_before_answer": False,
+        "wait_before_answer": "10%",
     },
 }
 
@@ -72,19 +72,32 @@ DEFAULT_ROLLCALL_SETTINGS = DEFAULT_ACCOUNT["rollcall_settings"].copy()
 
 
 def normalize_rollcall_settings(settings):
-    """Return rollcall settings in the current false-or-count format."""
+    """Normalize disabled, count, or percentage-based waiting."""
     merged = DEFAULT_ROLLCALL_SETTINGS.copy()
     if not isinstance(settings, dict):
         return merged
 
+    if "wait_before_answer" not in settings:
+        return merged
+
     wait_value = settings.get("wait_before_answer")
+    if isinstance(wait_value, str) and wait_value.strip().endswith("%"):
+        try:
+            percentage = float(wait_value.strip()[:-1])
+        except ValueError:
+            percentage = 0
+        if math.isfinite(percentage) and 0 < percentage <= 100:
+            merged["wait_before_answer"] = f"{percentage}%"
+        else:
+            merged["wait_before_answer"] = False
+        return merged
     if wait_value is False or wait_value is None:
         merged["wait_before_answer"] = False
         return merged
 
     try:
         wait_count = int(wait_value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         wait_count = 0
 
     merged["wait_before_answer"] = wait_count if wait_count > 0 else False
