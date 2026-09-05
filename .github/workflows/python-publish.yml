@@ -9,6 +9,9 @@ permissions:
     contents: read
 
 jobs:
+    windows-build:
+        uses: ./.github/workflows/windows-exe.yml
+
     release-build:
         runs-on: ubuntu-latest
 
@@ -30,9 +33,10 @@ jobs:
               with:
                   name: release-dists
                   path: xmu-rollcall-cli/dist/
+                  if-no-files-found: error
 
     github-release:
-        needs: release-build
+        needs: [release-build, windows-build]
         runs-on: ubuntu-latest
 
         permissions:
@@ -47,12 +51,19 @@ jobs:
                   name: release-dists
                   path: dist
 
+            - name: Download Windows executable
+              uses: actions/download-artifact@v5
+              with:
+                  name: xmurollcall-cli-windows-x64
+                  path: dist
+
             - name: Create GitHub Release
               env:
                   GH_TOKEN: ${{ github.token }}
+                  RELEASE_TAG: ${{ github.ref_name }}
               run: |
-                  gh release create "${{ github.ref_name }}" \
+                  gh release create "$RELEASE_TAG" \
                   dist/* \
-                  --title "${{ github.ref_name }}" \
+                  --title "$RELEASE_TAG" \
                   --notes "" \
                   --verify-tag

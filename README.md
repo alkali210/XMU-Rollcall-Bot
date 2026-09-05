@@ -15,18 +15,15 @@
 - 支持等待指定数量的同学完成签到后再提交
 - 支持多账号，并在 SQLite 中加密存储账号信息和会话
 - 在日志文件中记录签到状态
+- 美观的交互界面
 
 基于 [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot) 的 3.4.1 版本。
 
 ## 安装
 
-### 虚拟环境（使用 uv）
+### Windows 单文件 EXE
 
-在 `xmu-rollcall-cli` 目录中执行：
-
-```bash
-uv sync
-```
+双击 `xmurollcall-cli.exe` 进入交互菜单，无需安装 Python。
 
 ### 全局安装 （从源码）
 
@@ -36,15 +33,21 @@ cd XMU-Rollcall-Bot
 pip install -e xmu-rollcall-cli
 ```
 
-### 全局安装 （从 wheel）
+### 虚拟环境（使用 uv）
+
+在 `xmu-rollcall-cli` 目录中执行：
 
 ```bash
-pip install xmu_rollcall_cli-3.4.1.4-py3-none-any.whl # 从 releases 下载
+uv sync
 ```
 
 ## 使用
 
+不带参数运行 `xmurollcall-cli` 即可进入交互菜单，按 `Ctrl-C` 退出。
+原有带参数命令仍可直接使用：
+
 ```bash
+xmurollcall-cli        # 打开交互菜单
 xmurollcall-cli config  # 配置账号，支持多账号
 xmurollcall-cli switch  # 切换账号
 xmurollcall-cli start   # 启动监控
@@ -53,7 +56,9 @@ xmurollcall-cli refresh # 刷新登录状态
 uv run xmurollcall-cli <command> # 如果使用 uv
 ```
 
-日志文件位于 `XMU_ROLLCALL_CONFIG_DIR/xmu_rollcall.log`。
+`refresh` 会清除当前账号的已保存登录会话，下次启动监控时重新登录。监控界面显示当前时间、运行时长、查询次数及监控间隔，按 `Ctrl-C` 清屏并显示退出统计。
+
+日志文件位于配置目录内的 `xmu_rollcall.log`。
 
 > 目前无法处理二维码签到，检测到二维码签到时，监控程序将暂停 5 分钟，以防止短时间内重复请求。
 
@@ -61,7 +66,7 @@ uv run xmurollcall-cli <command> # 如果使用 uv
 
 ### 监控间隔
 
-默认配置文件路径优先级：`XMU_ROLLCALL_CONFIG_DIR/config.json` > `~/.xmu_rollcall/config.json` > `./xmu-rollcall-cli/config.json`
+配置目录优先使用环境变量 `XMU_ROLLCALL_CONFIG_DIR`，否则使用 `~/.xmu_rollcall`；用户目录不可写时使用当前目录下的 `.xmu_rollcall`。Windows 默认位置为 `%USERPROFILE%\.xmu_rollcall`，EXE 和 Python 版使用相同规则。目录内包含 `config.json`、`secure_store.sqlite3`、`secret.key` 和日志文件；这些运行数据不打包进 EXE。
 
 可以设置监控间隔，对所有账号生效（默认：10 秒）：
 
@@ -74,5 +79,3 @@ uv run xmurollcall-cli <command> # 如果使用 uv
 ### 等待同学签到
 
 在配置菜单中按 `s`（Edit rollcall settings），设置提交签到前等待的同学签到人数。
-
-> 可以随时按 `Ctrl + C` 中止配置。

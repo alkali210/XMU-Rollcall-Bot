@@ -10,6 +10,7 @@ dependencies = [
     "pycryptodome",
     "xmulogin",
     "click>=8.1.0",
+    "rich>=13.9.0",
     "aiohttp>=3.9.0",
 ]
 
