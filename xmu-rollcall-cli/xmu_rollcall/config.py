@@ -1,5 +1,6 @@
 import os
 import json
+import math
 from pathlib import Path
 from . import secure_store
 
@@ -40,8 +41,22 @@ secure_store.configure(CONFIG_DIR)
 
 DEFAULT_CONFIG = {
     "accounts": [],
-    "current_account_id": None
+    "current_account_id": None,
+    "interval": 10,
 }
+
+DEFAULT_INTERVAL = 10
+
+
+def get_interval(config):
+    value = config.get("interval", DEFAULT_INTERVAL)
+    try:
+        interval = float(value)
+    except (TypeError, ValueError):
+        return DEFAULT_INTERVAL
+    if isinstance(value, bool) or not math.isfinite(interval) or interval <= 0:
+        return DEFAULT_INTERVAL
+    return interval
 
 DEFAULT_ACCOUNT = {
     "id": 0,
@@ -49,7 +64,7 @@ DEFAULT_ACCOUNT = {
     "username": "",
     "password": "",
     "rollcall_settings": {
-        "wait_before_answer": False,
+        "wait_before_answer": "10%",
     },
 }
 
@@ -57,19 +72,32 @@ DEFAULT_ROLLCALL_SETTINGS = DEFAULT_ACCOUNT["rollcall_settings"].copy()
 
 
 def normalize_rollcall_settings(settings):
-    """Return rollcall settings in the current false-or-count format."""
+    """Normalize disabled, count, or percentage-based waiting."""
     merged = DEFAULT_ROLLCALL_SETTINGS.copy()
-    if not settings:
+    if not isinstance(settings, dict):
+        return merged
+
+    if "wait_before_answer" not in settings:
         return merged
 
     wait_value = settings.get("wait_before_answer")
+    if isinstance(wait_value, str) and wait_value.strip().endswith("%"):
+        try:
+            percentage = float(wait_value.strip()[:-1])
+        except ValueError:
+            percentage = 0
+        if math.isfinite(percentage) and 0 < percentage <= 100:
+            merged["wait_before_answer"] = f"{percentage}%"
+        else:
+            merged["wait_before_answer"] = False
+        return merged
     if wait_value is False or wait_value is None:
         merged["wait_before_answer"] = False
         return merged
 
     try:
         wait_count = int(wait_value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         wait_count = 0
 
     merged["wait_before_answer"] = wait_count if wait_count > 0 else False
@@ -88,7 +116,14 @@ def normalize_account(account):
 def _with_stored_accounts(config, accounts):
     """Attach decrypted accounts from SQLite to an in-memory config."""
     config = (config or DEFAULT_CONFIG).copy()
-    config["accounts"] = [normalize_account(account) for account in accounts]
+    public_accounts = {item["id"]: item for item in config.get("accounts", [])
+                       if isinstance(item, dict) and "id" in item}
+    config["accounts"] = [normalize_account({
+        **account,
+        "rollcall_settings": public_accounts.get(account["id"], {}).get(
+            "rollcall_settings", account.get("rollcall_settings", {})),
+    }) for account in accounts]
+    config["interval"] = get_interval(config)
     if config.get("current_account_id") is None and accounts:
         config["current_account_id"] = accounts[0].get("id")
     return config
@@ -104,41 +139,31 @@ def load_config():
     """加载配置文件"""
     ensure_config_dir()
     stored_accounts = secure_store.list_accounts()
+    config = {}
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 config = json.load(f)
-                # 兼容旧版配置格式
-                if "accounts" not in config and "username" in config:
-                    # 迁移旧配置到新格式
-                    old_username = config.get("username", "")
-                    old_password = config.get("password", "")
-                    if old_username and old_password:
-                        new_config = {
-                            "accounts": [{
-                                "id": 1,
-                                "name": "",
-                                "username": old_username,
-                                "password": old_password,
-                                "rollcall_settings": DEFAULT_ROLLCALL_SETTINGS.copy()
-                            }],
-                            "current_account_id": 1
-                        }
-                        secure_store.replace_accounts(new_config["accounts"])
-                        save_config(new_config)
-                        return new_config
-                    return DEFAULT_CONFIG.copy()
-                legacy_accounts = config.get("accounts", [])
-                if legacy_accounts and any(acc.get("username") or acc.get("password") for acc in legacy_accounts):
-                    legacy_accounts = [normalize_account(acc) for acc in legacy_accounts]
-                    secure_store.replace_accounts(legacy_accounts)
-                    config["accounts"] = secure_store.list_accounts()
-                    save_config(config)
-                    return config
-                return _with_stored_accounts(config, stored_accounts)
-        except Exception:
-            return _with_stored_accounts(DEFAULT_CONFIG, stored_accounts)
-    return _with_stored_accounts(DEFAULT_CONFIG, stored_accounts)
+        except (OSError, ValueError) as exc:
+            raise RuntimeError(f"Cannot read configuration {CONFIG_FILE}: {exc}") from exc
+        if not isinstance(config, dict) or not isinstance(config.get("accounts", []), list):
+            raise RuntimeError(f"Invalid configuration format: {CONFIG_FILE}")
+        # Migrate legacy plaintext credentials without discarding public settings.
+        if "accounts" not in config and config.get("username") and config.get("password"):
+            config["accounts"] = [{"id": 1, "name": "",
+                                   "username": config["username"],
+                                   "password": config["password"]}]
+            config["current_account_id"] = 1
+        legacy_accounts = config.get("accounts", [])
+        if any(isinstance(acc, dict) and (acc.get("username") or acc.get("password"))
+               for acc in legacy_accounts):
+            save_config(config)
+            return config
+    merged = _with_stored_accounts(config, stored_accounts)
+    if (any(account.get("rollcall_settings") for account in stored_accounts)
+            or "accounts" not in config or "interval" not in config):
+        save_config(merged)
+    return merged
 
 def save_config(config):
     """保存配置文件"""
@@ -152,8 +177,16 @@ def save_config(config):
         for key, value in config.items()
         if key != "accounts" and key not in {"username", "password", "delay"}
     }
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+    safe_config["interval"] = get_interval(config)
+    safe_config["accounts"] = [
+        {"id": account["id"], "rollcall_settings": account["rollcall_settings"]}
+        for account in accounts
+    ]
+    temporary = CONFIG_FILE.with_suffix(".json.tmp")
+    with open(temporary, "w", encoding="utf-8") as f:
         json.dump(safe_config, f, indent=2, ensure_ascii=False)
+    os.replace(temporary, CONFIG_FILE)
+    secure_store.clear_legacy_rollcall_settings()
 
 def get_next_account_id(config):
     """获取下一个可用的账号ID"""

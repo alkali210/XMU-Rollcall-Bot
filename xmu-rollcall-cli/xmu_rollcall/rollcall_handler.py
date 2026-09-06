@@ -1,8 +1,9 @@
 import time
 import builtins
 import logging
+from decimal import Decimal, ROUND_CEILING
 from .verify import send_code, send_radar, base_url
-from .config import get_rollcall_settings
+from .config import get_rollcall_settings, normalize_rollcall_settings
 
 logger = logging.getLogger(__name__)
 WAIT_POLL_INTERVAL = 3
@@ -52,8 +53,8 @@ def _count_signed_students(students):
     )
     return count
 
-def _fetch_signed_count(session, rollcall_id):
-    """Query current number of students who have already signed."""
+def _fetch_attendance(session, rollcall_id):
+    """Return signed and total students, or None for unavailable data."""
     try:
         resp = session.get(
             f"{base_url}/api/rollcall/{rollcall_id}/student_rollcalls",
@@ -61,10 +62,17 @@ def _fetch_signed_count(session, rollcall_id):
         )
         if resp.status_code == 200:
             students = _extract_student_rollcalls(resp.json())
-            return _count_signed_students(students)
+            if not students or any(not isinstance(student, dict) for student in students):
+                return None
+            return _count_signed_students(students), len(students)
     except Exception as exc:
         logger.debug("Failed to fetch signed count for rollcall_id=%s: %s", rollcall_id, exc)
     return None
+
+
+def _fetch_signed_count(session, rollcall_id):
+    attendance = _fetch_attendance(session, rollcall_id)
+    return attendance[0] if attendance is not None else None
 
 def _choose_wait_target(settings):
     wait_value = settings.get("wait_before_answer", False)
@@ -83,23 +91,35 @@ def _wait_status_line(count_text, target, number_code=None):
 def wait_for_classmates(session, rollcall_id, settings, number_code=None):
     """Wait until enough classmates have signed before answering."""
     print = log_and_print
+    settings = normalize_rollcall_settings(settings)
+    wait_value = settings["wait_before_answer"]
+    percentage = (Decimal(wait_value[:-1])
+                  if isinstance(wait_value, str) and wait_value.endswith("%") else None)
     target = _choose_wait_target(settings)
-    if target <= 0:
+    if percentage is None and target <= 0:
         return
 
-    print(f"Waiting for {target} classmate(s) to answer before signing...")
+    target_label = f"{percentage}% of students" if percentage is not None else f"{target} classmate(s)"
+    print(f"Waiting for {target_label} to answer before signing...")
     if number_code:
         print(f"Number code: {number_code}")
     while True:
-        count = _fetch_signed_count(session, rollcall_id)
+        attendance = _fetch_attendance(session, rollcall_id)
+        count = attendance[0] if attendance is not None else None
         if count is not None:
-            print(_wait_status_line(count, target, number_code), end="", flush=True)
+            if percentage is not None:
+                total = attendance[1]
+                target = int((percentage * total / 100).to_integral_value(rounding=ROUND_CEILING))
+                display_target = f"{total} | Target: {percentage}% ({target} students)"
+            else:
+                display_target = target
+            print(_wait_status_line(count, display_target, number_code), end="", flush=True)
             if count >= target:
                 print()
                 return
         else:
             code_text = f" | Number code: {number_code}" if number_code else ""
-            print(f"\r  Signed: unknown/{target}, retrying...{code_text}", end="", flush=True)
+            print(f"\r  Signed: unknown | Target: {target_label}, retrying...{code_text}", end="", flush=True)
 
         time.sleep(WAIT_POLL_INTERVAL)
 

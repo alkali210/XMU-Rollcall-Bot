@@ -12,6 +12,7 @@ import json
 import os
 import sqlite3
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 from Crypto.Cipher import AES
@@ -105,7 +106,17 @@ def _decrypt(blob, default=""):
         return default
 
 
+@contextmanager
 def _connect():
+    conn = _open_connection()
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
+
+
+def _open_connection():
     _ensure_dir()
     _, db_path, _ = _paths()
     conn = sqlite3.connect(str(db_path))
@@ -116,16 +127,10 @@ def _connect():
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL DEFAULT '',
             username BLOB NOT NULL,
-            password BLOB NOT NULL,
-            rollcall_settings TEXT NOT NULL DEFAULT '{}'
+            password BLOB NOT NULL
         )
         """
     )
-    account_columns = {
-        row[1] for row in conn.execute("PRAGMA table_info(accounts)").fetchall()
-    }
-    if "rollcall_settings" not in account_columns:
-        conn.execute("ALTER TABLE accounts ADD COLUMN rollcall_settings TEXT NOT NULL DEFAULT '{}'")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -141,8 +146,10 @@ def _connect():
 
 def list_accounts():
     with _connect() as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)")}
+        settings_column = "rollcall_settings" if "rollcall_settings" in columns else "'{}'"
         rows = conn.execute(
-            "SELECT id, name, username, password, rollcall_settings FROM accounts ORDER BY id"
+            f"SELECT id, name, username, password, {settings_column} FROM accounts ORDER BY id"
         ).fetchall()
     accounts = []
     for row in rows:
@@ -160,32 +167,34 @@ def list_accounts():
     return accounts
 
 
-def _settings_json(account):
-    return json.dumps(
-        account.get("rollcall_settings") or {},
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
+def clear_legacy_rollcall_settings():
+    """Clear old settings only after config.json has been safely written.
+
+    Keep the empty legacy column for compatibility with older SQLite versions.
+    New databases do not have this column.
+    """
+    with _connect() as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)")}
+        if "rollcall_settings" in columns:
+            conn.execute("UPDATE accounts SET rollcall_settings = '{}' WHERE rollcall_settings != '{}'")
 
 
 def upsert_account(account):
     with _connect() as conn:
         conn.execute(
             """
-            INSERT INTO accounts (id, name, username, password, rollcall_settings)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO accounts (id, name, username, password)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 username = excluded.username,
-                password = excluded.password,
-                rollcall_settings = excluded.rollcall_settings
+                password = excluded.password
             """,
             (
                 int(account.get("id")),
                 account.get("name") or "",
                 sqlite3.Binary(_encrypt(account.get("username") or "")),
                 sqlite3.Binary(_encrypt(account.get("password") or "")),
-                _settings_json(account),
             ),
         )
 
@@ -205,20 +214,18 @@ def replace_accounts(accounts):
                 conn.execute("DELETE FROM sessions WHERE account_id = ?", (account_id,))
             conn.execute(
                 """
-                INSERT INTO accounts (id, name, username, password, rollcall_settings)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO accounts (id, name, username, password)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     username = excluded.username,
-                    password = excluded.password,
-                    rollcall_settings = excluded.rollcall_settings
+                    password = excluded.password
                 """,
                 (
                     account_id,
                     account.get("name") or "",
                     sqlite3.Binary(_encrypt(username)),
                     sqlite3.Binary(_encrypt(account.get("password") or "")),
-                    _settings_json(account),
                 ),
             )
 

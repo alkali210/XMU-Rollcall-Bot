@@ -2,25 +2,24 @@ import time
 import os
 import sys
 import requests
-import shutil
 import logging
 from xmulogin import xmulogin
-from . import __version__
-from .logging_config import setup_logging, strip_ansi
-from .utils import clear_screen, save_session, load_session, verify_session
+from . import tui
+from rich.live import Live
+from .logging_config import setup_logging
+from .utils import save_session, load_session, verify_session
 from .rollcall_handler import process_rollcalls
-from .config import get_cookies_path, load_config, has_saved_session
+from .config import get_cookies_path, load_config, has_saved_session, get_interval, DEFAULT_INTERVAL
 
 logger = logging.getLogger(__name__)
 
 base_url = "https://lnt.xmu.edu.cn"
-DEFAULT_INTERVAL = 10
 interval = DEFAULT_INTERVAL
 headers = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
+        "Chrome/142.0.0.0 Safari/537.36"
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "zh-CN,zh;q=0.9",
@@ -51,55 +50,31 @@ GREEN_TEXT = f"{Colors.OKGREEN}"
 YELLOW_TEXT = f"{Colors.WARNING}"
 END = Colors.ENDC
 
-def _coerce_number(value, default):
-    if value is None or isinstance(value, bool):
-        return default
-    if isinstance(value, (int, float)):
-        return value
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
 def _load_monitor_settings():
     """Load monitor polling interval from config."""
     config = load_config()
-    return _coerce_number(config.get("interval"), DEFAULT_INTERVAL)
+    return get_interval(config)
 
-def get_terminal_width():
-    """获取终端宽度"""
-    try:
-        return shutil.get_terminal_size().columns
-    except:
-        return 80
+def clear_screen():
+    if tui.console.is_terminal:
+        tui.console.clear()
+
 
 def center_text(text, width=None):
-    """居中文本"""
-    if width is None:
-        width = get_terminal_width()
-    text_len = len(strip_ansi(text))
-    if text_len >= width:
-        return text
-    left_padding = (width - text_len) // 2
-    return ' ' * left_padding + text
+    width = tui.console.width if width is None else width
+    return "\n".join(
+        " " * max(0, (width - tui.Text.from_ansi(line).cell_len) // 2) + line
+        for line in text.split("\n")
+    )
+
 
 def print_banner():
-    """打印美化的横幅"""
-    width = get_terminal_width()
-    line = '=' * width
+    tui.console.print(tui.frame(tui.Text("Preparing your account and saved session."), "Initialization"))
 
-    title1 = "XMU Rollcall Bot CLI"
-    title2 = f"Version {__version__}"
 
-    print(f"{Colors.OKCYAN}{line}{Colors.ENDC}")
-    print(center_text(f"{Colors.BOLD}{title1}{Colors.ENDC}"))
-    print(center_text(f"{Colors.GRAY}{title2}{Colors.ENDC}"))
-    print(f"{Colors.OKCYAN}{line}{Colors.ENDC}")
+def print_separator(char="─"):
+    tui.console.rule(style="bright_black")
 
-def print_separator(char="-"):
-    """打印分隔线"""
-    width = get_terminal_width()
-    print(f"{Colors.GRAY}{char * width}{Colors.ENDC}")
 
 def format_time(seconds):
     """格式化时间显示"""
@@ -113,98 +88,19 @@ def format_time(seconds):
     else:
         return f"{secs}s"
 
-_COLOR_PALETTE = (
-    Colors.FAIL,
-    Colors.WARNING,
-    Colors.OKGREEN,
-    Colors.OKCYAN,
-    Colors.OKBLUE,
-    Colors.HEADER
-)
-_COLOR_COUNT = len(_COLOR_PALETTE)
+def monitor_dashboard(name, start_time, query_count):
+    return tui.dashboard(name, time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()),
+                         format_time(int(time.time() - start_time)), query_count, interval)
 
-def get_colorful_text(text, color_offset=0):
-    """为文本的每个字符应用不同的颜色"""
-    return ''.join(
-        _COLOR_PALETTE[(i + color_offset) % _COLOR_COUNT] + char
-        for i, char in enumerate(text)
-    ) + Colors.ENDC
-
-def print_dashboard(name, start_time, query_count, banner_frame=0, show_banner=True):
-    """打印主仪表板"""
-    clear_screen()
-    print_banner()
-
-    local_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-
-    if time.localtime().tm_hour < 12 and time.localtime().tm_hour >= 5:
-        greeting = "Good morning"
-    elif time.localtime().tm_hour < 18 and time.localtime().tm_hour >= 12:
-        greeting = "Good afternoon"
-    else:
-        greeting = "Good evening"
-
-    now = time.time()
-    running_time = int(now - start_time)
-
-    print(f"\n{Colors.OKGREEN}{Colors.BOLD}{greeting}, {name}!{Colors.ENDC}\n")
-
-    print(f"{Colors.BOLD}SYSTEM STATUS{Colors.ENDC}")
-    print_separator()
-    print(f"{Colors.BOLD}Current Time:{Colors.ENDC}    {Colors.OKCYAN}{local_time}{Colors.ENDC}")
-    print(f"{Colors.BOLD}Running Time:{Colors.ENDC}    {Colors.OKGREEN}{format_time(running_time)}{Colors.ENDC}")
-    print(f"{Colors.BOLD}Query Count:{Colors.ENDC}     {Colors.WARNING}{query_count}{Colors.ENDC}")
-
-    print(f"\n{Colors.BOLD}ROLLCALL MONITOR{Colors.ENDC}")
-    print_separator()
-    print(f"{Colors.OKGREEN}Status:{Colors.ENDC} Active - Monitoring for new rollcalls...")
-    print(f"{Colors.GRAY}Checking every {interval} second(s){Colors.ENDC}")
-    print(f"{Colors.GRAY}Press Ctrl+C to exit{Colors.ENDC}\n")
-    print_separator()
 
 def print_login_status(message, is_success=True):
     """打印登录状态"""
     if is_success:
-        print(f"{Colors.OKGREEN}[SUCCESS]{Colors.ENDC} {message}")
+        tui.echo(f"{Colors.OKGREEN}[SUCCESS]{Colors.ENDC} {message}")
         logger.info(f"[SUCCESS] {message}")
     else:
-        print(f"{Colors.FAIL}[FAILED]{Colors.ENDC} {message}")
+        tui.echo(f"{Colors.FAIL}[FAILED]{Colors.ENDC} {message}")
         logger.warning(f"[FAILED] {message}")
-
-TIME_LINE = 10
-RUNTIME_LINE = 11
-QUERY_LINE = 12
-FOOTER_LINE = 20
-
-def update_status_line(line_num, label, value, color):
-    """更新指定行的状态信息，不清屏"""
-    sys.stdout.write("\033[?25l")
-    sys.stdout.write("\033[s")
-    sys.stdout.write(f"\033[{line_num};0H")
-    sys.stdout.write("\033[2K")
-    sys.stdout.write(f"{Colors.BOLD}{label}{Colors.ENDC}    {color}{value}{Colors.ENDC}")
-    sys.stdout.write("\033[u")
-    sys.stdout.write("\033[?25h")
-    sys.stdout.flush()
-
-def update_footer_text():
-    """更新底部彩色文字，不清屏"""
-    text = "XMU-Rollcall-Bot @ KrsMt , Revision @ alkali210"
-    colored = get_colorful_text(text, 0)
-    width = get_terminal_width()
-
-    sys.stdout.write("\033[?25l")
-    sys.stdout.write("\033[s")
-    sys.stdout.write(f"\033[{FOOTER_LINE};0H")
-    sys.stdout.write("\033[2K")
-
-    text_len = len(text)
-    left_padding = (width - text_len) // 2
-    sys.stdout.write(' ' * left_padding + colored)
-
-    sys.stdout.write("\033[u")
-    sys.stdout.write("\033[?25h")
-    sys.stdout.flush()
 
 def start_monitor(account):
     """启动监控程序"""
@@ -230,13 +126,13 @@ def start_monitor(account):
     # 初始化
     clear_screen()
     print_banner()
-    print(f"\n{Colors.BOLD}Initializing XMU Rollcall Bot...{Colors.ENDC}\n")
+    tui.echo(f"\n{Colors.BOLD}Initializing XMU Rollcall Bot...{Colors.ENDC}\n")
     print_separator()
 
-    print(f"\n{Colors.OKCYAN}[Step 1/3]{Colors.ENDC} Checking credentials...")
+    tui.echo(f"\n{Colors.OKCYAN}[Step 1/3]{Colors.ENDC} Checking credentials...")
 
     if has_saved_session(ACCOUNT_ID) or os.path.exists(legacy_cookies_path):
-        print(f"{Colors.OKCYAN}[Step 2/3]{Colors.ENDC} Found cached session, attempting to restore...")
+        tui.echo(f"{Colors.OKCYAN}[Step 2/3]{Colors.ENDC} Found cached session, attempting to restore...")
         session_candidate = requests.Session()
         if load_session(session_candidate, ACCOUNT_ID):
             profile = verify_session(session_candidate)
@@ -249,7 +145,7 @@ def start_monitor(account):
             print_login_status("Failed to load session", False)
 
     if not session:
-        print(f"{Colors.OKCYAN}[Step 2/3]{Colors.ENDC} Logging in with credentials...")
+        tui.echo(f"{Colors.OKCYAN}[Step 2/3]{Colors.ENDC} Logging in with credentials...")
         time.sleep(2)
         session = xmulogin(type=3, username=USERNAME, password=PASSWORD)
         if session:
@@ -260,13 +156,13 @@ def start_monitor(account):
             time.sleep(5)
             sys.exit(1)
 
-    print(f"{Colors.OKCYAN}[Step 3/3]{Colors.ENDC} Fetching user profile...")
+    tui.echo(f"{Colors.OKCYAN}[Step 3/3]{Colors.ENDC} Fetching user profile...")
     # profile = session.get(f"{base_url}/api/profile", headers=headers).json()
     # name = profile["name"]
-    print(f"Welcome, {ACCOUNT_NAME}")
+    tui.echo(f"Welcome, {ACCOUNT_NAME}")
 
-    print(f"\n{Colors.OKGREEN}{Colors.BOLD}Initialization complete{Colors.ENDC}")
-    print(f"\n{Colors.GRAY}Starting monitor in 3 seconds...{Colors.ENDC}")
+    tui.echo(f"\n{Colors.OKGREEN}{Colors.BOLD}Initialization complete{Colors.ENDC}")
+    tui.echo(f"\n{Colors.GRAY}Starting monitor in 3 seconds...{Colors.ENDC}")
     time.sleep(3)
 
     # 主循环
@@ -274,9 +170,11 @@ def start_monitor(account):
     query_count = 0
     start_time = time.time()
 
-    print_dashboard(ACCOUNT_NAME, start_time, query_count, 0, show_banner=False)
-
-    footer_initialized = False
+    clear_screen()
+    live = Live(monitor_dashboard(ACCOUNT_NAME, start_time, query_count),
+                console=tui.console, auto_refresh=False)
+    live.start(refresh=True)
+    last_display_second = -1
     _last_query_time = -interval # 进入循环时立即查询一次
 
     try:
@@ -289,59 +187,58 @@ def start_monitor(account):
             try:
                 current_time = time.time()
 
-                if not footer_initialized:
-                    footer_initialized = True
-                    update_footer_text()
-
                 elapsed = int(current_time - start_time)
-                local_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-                running_time = format_time(elapsed)
+                if elapsed != last_display_second:
+                    last_display_second = elapsed
+                    live.update(monitor_dashboard(ACCOUNT_NAME, start_time, query_count), refresh=True)
 
-                update_status_line(TIME_LINE, "Current Time:", local_time, Colors.OKCYAN)
-                update_status_line(RUNTIME_LINE, "Running Time:", running_time, Colors.OKGREEN)
-                
                 if elapsed > _last_query_time + interval - 1:
                     _last_query_time = elapsed
                     data = session.get(rollcalls_url, headers=headers).json()
                     query_count += 1
 
-                    update_status_line(QUERY_LINE, "Query Count: ", str(query_count), Colors.WARNING)
+                    live.update(monitor_dashboard(ACCOUNT_NAME, start_time, query_count), refresh=True)
 
                     if temp_data != data:
                         temp_data = data
                         if len(temp_data['rollcalls']) > 0:
                             logger.info("New rollcall detected: count=%s", len(temp_data['rollcalls']))
+                            live.stop()
                             clear_screen()
-                            width = get_terminal_width()
-                            print(f"\n{Colors.WARNING}{Colors.BOLD}{'!' * width}{Colors.ENDC}")
-                            print(center_text(f"{Colors.WARNING}{Colors.BOLD}NEW ROLLCALL DETECTED{Colors.ENDC}"))
-                            print(f"{Colors.WARNING}{Colors.BOLD}{'!' * width}{Colors.ENDC}\n")
-                            
+                            tui.console.print(tui.frame(tui.Text("Processing new rollcalls…", style="yellow"), "New rollcall detected"))
+
                             temp_data = process_rollcalls(temp_data, session, account)
                             print_separator("=")
-                            print(f"\n{center_text(f'{Colors.GRAY}Press Ctrl+C to exit, continuing monitor...{Colors.ENDC}')}\n")
+                            tui.echo(f"\n{center_text(f'{Colors.GRAY}Press Ctrl+C to exit, continuing monitor...{Colors.ENDC}')}\n")
                             try:
                                 time.sleep(3)
                             except KeyboardInterrupt:
                                 raise
-                            print_dashboard(ACCOUNT_NAME, start_time, query_count, 0)
+                            clear_screen()
+                            live.update(monitor_dashboard(ACCOUNT_NAME, start_time, query_count))
+                            live.start(refresh=True)
             except KeyboardInterrupt:
                 raise
             except Exception as e:
+                live.stop()
                 logger.exception("Monitor exited because of an error: %s", str(e))
                 clear_screen()
-                print(f"\n{center_text(f'{Colors.FAIL}{Colors.BOLD}Error occurred:{Colors.ENDC} {str(e)}')}")
-                print(f"{center_text(f'{Colors.GRAY}Exiting...{Colors.ENDC}')}\n")
+                tui.echo(f"\n{center_text(f'{Colors.FAIL}{Colors.BOLD}Error occurred:{Colors.ENDC} {str(e)}')}")
+                tui.echo(f"{center_text(f'{Colors.GRAY}Exiting...{Colors.ENDC}')}\n")
                 sys.exit(1)
     except KeyboardInterrupt:
+        live.stop()
         logger.info(
             "Monitor stopped by user. queries=%s running_time=%s",
             query_count,
             format_time(int(time.time() - start_time)),
         )
         clear_screen()
-        print(f"\n{center_text(f'{Colors.WARNING}Shutting down gracefully...{Colors.ENDC}')}")
-        print(f"{center_text(f'{Colors.GRAY}Total queries performed: {query_count}{Colors.ENDC}')}")
-        print(f"{center_text(f'{Colors.GRAY}Total running time: {format_time(int(time.time() - start_time))}{Colors.ENDC}')}")
-        print(f"\n{center_text(f'{Colors.OKGREEN}Goodbye{Colors.ENDC}')}\n")
+        tui.echo(f"\n{center_text(f'{Colors.WARNING}Shutting down gracefully...{Colors.ENDC}')}")
+        tui.echo(f"{center_text(f'{Colors.GRAY}Total queries performed: {query_count}{Colors.ENDC}')}")
+        tui.echo(f"{center_text(f'{Colors.GRAY}Total running time: {format_time(int(time.time() - start_time))}{Colors.ENDC}')}")
+        tui.echo(f"\n{center_text(f'{Colors.OKGREEN}Goodbye{Colors.ENDC}')}\n")
         sys.exit(0)
+
+    finally:
+        live.stop()
