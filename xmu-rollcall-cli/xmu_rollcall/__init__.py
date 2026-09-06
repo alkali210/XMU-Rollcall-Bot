@@ -1,3 +1,3 @@
 """XMU Rollcall CLI Package"""
 
-__version__ = "3.4.2.0a"
+__version__ = "3.5.0.0a"
