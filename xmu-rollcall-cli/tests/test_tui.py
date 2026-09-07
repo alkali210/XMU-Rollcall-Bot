@@ -2,6 +2,7 @@ import io
 import unittest
 from unittest.mock import Mock, patch
 
+import click
 from click.testing import CliRunner
 from rich.console import Console
 
@@ -47,6 +48,31 @@ class TerminalTests(unittest.TestCase):
         result = self.invoke(["start"])
         self.assertEqual(result.exit_code, 1)
         self.assertNotIn("Welcome back", result.output)
+
+    def test_direct_config_exits_cleanly_on_eof(self):
+        for user_input in ("", "invalid\n", "n\n", "i\n"):
+            with self.subTest(input=user_input):
+                result = self.invoke(["config"], input=user_input)
+                self.assertEqual(result.exit_code, 0, result.output)
+                self.assertNotIn("Aborted!", result.output)
+                self.assertNotIn("Welcome back", result.output)
+
+    def test_config_interrupt_exits_or_returns_to_launcher(self):
+        for interruption in (click.Abort, KeyboardInterrupt):
+            for nested in (False, True):
+                for args in (["config"], []):
+                    with self.subTest(interruption=interruption, nested=nested, args=args):
+                        prompts = [] if args else ["config"]
+                        if nested:
+                            prompts.append("i")
+                        prompts.append(interruption())
+                        if not args:
+                            prompts.append(click.Abort())
+                        with patch.object(tui, "prompt", side_effect=prompts):
+                            result = self.invoke(args)
+                        self.assertEqual(result.exit_code, 0, result.output)
+                        self.assertNotIn("Aborted!", result.output)
+                        self.assertEqual(result.output.count("Welcome back"), 0 if args else 2)
 
     def test_stopping_monitor_exits_launcher(self):
         for interruption in (SystemExit(0), KeyboardInterrupt()):

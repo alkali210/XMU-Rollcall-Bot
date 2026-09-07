@@ -227,31 +227,35 @@ def config():
         save_config(current_config)
         tui.echo(f"Polling interval saved: {value:g}s (all accounts).")
 
-    while True:
-        tui.console.print(tui.frame(tui.Group(tui.sections(
-            tui.accounts_panel(get_all_accounts(current_config),
-                               get_current_account(current_config), get_rollcall_settings),
-            tui.panel(tui.menu_rows([
-                ("n", "Add new account"), ("d", "Delete account"),
-                ("s", "Edit rollcall settings"),
-                ("i", f"Polling interval: {get_interval(current_config):g}s (all accounts)")]),
-                "Actions", "blue")),
-            tui.Text(f"Configuration file: {CONFIG_FILE.resolve()}", style="dim")),
-            "Configuration", subtitle="Ctrl+C to return"))
+    try:
+        while True:
+            tui.console.print(tui.frame(tui.Group(tui.sections(
+                tui.accounts_panel(get_all_accounts(current_config),
+                                   get_current_account(current_config), get_rollcall_settings),
+                tui.panel(tui.menu_rows([
+                    ("n", "Add new account"), ("d", "Delete account"),
+                    ("s", "Edit rollcall settings"),
+                    ("i", f"Polling interval: {get_interval(current_config):g}s (all accounts)")]),
+                    "Actions", "blue")),
+                tui.Text(f"Configuration file: {CONFIG_FILE.resolve()}", style="dim")),
+                "Configuration", subtitle="Ctrl+C to return"))
 
-        action = tui.prompt(
-            f"{Colors.BOLD}Action{Colors.ENDC}",
-            type=click.Choice(['n', 'd', 's', 'i'], case_sensitive=False),
-        )
+            action = tui.prompt(
+                f"{Colors.BOLD}Action{Colors.ENDC}",
+                type=click.Choice(['n', 'd', 's', 'i'], case_sensitive=False),
+            )
 
-        if action.lower() == 'n':
-            add_new_account()
-        elif action.lower() == 'd':
-            delete_existing_account()
-        elif action.lower() == 's':
-            edit_account_settings()
-        elif action.lower() == 'i':
-            edit_interval()
+            if action.lower() == 'n':
+                add_new_account()
+            elif action.lower() == 'd':
+                delete_existing_account()
+            elif action.lower() == 's':
+                edit_account_settings()
+            elif action.lower() == 'i':
+                edit_interval()
+    except (click.Abort, KeyboardInterrupt):
+        tui.echo("Configuration closed.")
+        return
 
 @cli.command()
 def start():

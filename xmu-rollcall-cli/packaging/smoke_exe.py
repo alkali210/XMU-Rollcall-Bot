@@ -14,7 +14,7 @@ def main():
         for args, user_input, expected_code, expected_text in [
             (["--help"], "", 0, "Commands:"),
             ([], "", 0, "Welcome back"),
-            (["config"], "q\n", 0, "Configuration"),
+            (["config"], "", 0, "Configuration"),
             (["start"], "", 1, "Configuration incomplete"),
         ]:
             result = subprocess.run(
