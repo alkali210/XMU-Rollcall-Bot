@@ -8,3 +8,4 @@ secure_store.sqlite3
 secret.key
 *.log
 *bootstrap*
+node_modules/
