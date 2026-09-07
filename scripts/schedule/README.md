@@ -26,7 +26,16 @@ xmu-rollcall start
 
 ### 使用方法
 
+安装依赖：
+
+```bash
+npm ci
+```
+
+运行：
+
 ```bash
 node --experimental-strip-types schedule.ts <ics 文件> [--timezone 时区]
 ```
+
 按下 `Ctrl+C` 停止，退出时也会清理签到进程。
