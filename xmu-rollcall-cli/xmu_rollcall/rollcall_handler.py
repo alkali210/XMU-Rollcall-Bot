@@ -1,6 +1,7 @@
 import time
 import builtins
 import logging
+from .network import is_retryable
 from decimal import Decimal, ROUND_CEILING
 from .verify import send_code, send_radar, base_url
 from .config import get_rollcall_settings, normalize_rollcall_settings
@@ -60,12 +61,15 @@ def _fetch_attendance(session, rollcall_id):
             f"{base_url}/api/rollcall/{rollcall_id}/student_rollcalls",
             timeout=10,
         )
+        resp.raise_for_status()
         if resp.status_code == 200:
             students = _extract_student_rollcalls(resp.json())
             if not students or any(not isinstance(student, dict) for student in students):
                 return None
             return _count_signed_students(students), len(students)
     except Exception as exc:
+        if is_retryable(exc):
+            raise
         logger.debug("Failed to fetch signed count for rollcall_id=%s: %s", rollcall_id, exc)
     return None
 

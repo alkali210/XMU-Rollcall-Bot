@@ -7,6 +7,7 @@ from xmulogin import xmulogin
 from . import tui
 from rich.live import Live
 from .logging_config import setup_logging
+from .network import REQUEST_TIMEOUT, RETRY_INITIAL_DELAY, RETRY_MAX_DELAY, is_retryable
 from .utils import save_session, load_session, verify_session
 from .rollcall_handler import process_rollcalls
 from .config import get_cookies_path, load_config, has_saved_session, get_interval, DEFAULT_INTERVAL
@@ -102,6 +103,25 @@ def print_login_status(message, is_success=True):
         tui.echo(f"{Colors.FAIL}[FAILED]{Colors.ENDC} {message}")
         logger.warning(f"[FAILED] {message}")
 
+
+def _retry_initialization(operation):
+    delay = RETRY_INITIAL_DELAY
+    while True:
+        try:
+            return operation()
+        except requests.RequestException as exc:
+            if not is_retryable(exc):
+                raise
+            _report_retry(exc, delay)
+            time.sleep(delay)
+            delay = min(delay * 2, RETRY_MAX_DELAY)
+
+
+def _report_retry(exc, delay):
+    message = f"Network temporarily unavailable ({type(exc).__name__}). Retrying in {delay}s. Ctrl+C to exit."
+    logger.warning(message)
+    tui.echo(message)
+
 def start_monitor(account):
     """启动监控程序"""
     log_file = setup_logging()
@@ -135,7 +155,7 @@ def start_monitor(account):
         tui.echo(f"{Colors.OKCYAN}[Step 2/3]{Colors.ENDC} Found cached session, attempting to restore...")
         session_candidate = requests.Session()
         if load_session(session_candidate, ACCOUNT_ID):
-            profile = verify_session(session_candidate)
+            profile = _retry_initialization(lambda: verify_session(session_candidate))
             if profile:
                 session = session_candidate
                 print_login_status("Session restored successfully", True)
@@ -147,7 +167,8 @@ def start_monitor(account):
     if not session:
         tui.echo(f"{Colors.OKCYAN}[Step 2/3]{Colors.ENDC} Logging in with credentials...")
         time.sleep(2)
-        session = xmulogin(type=3, username=USERNAME, password=PASSWORD)
+        session = _retry_initialization(
+            lambda: xmulogin(type=3, username=USERNAME, password=PASSWORD))
         if session:
             save_session(session, ACCOUNT_ID)
             print_login_status("Login successful", True)
@@ -176,6 +197,8 @@ def start_monitor(account):
     live.start(refresh=True)
     last_display_second = -1
     _last_query_time = -interval # 进入循环时立即查询一次
+    retry_delay = RETRY_INITIAL_DELAY
+    recovering = False
 
     try:
         while True:
@@ -194,20 +217,21 @@ def start_monitor(account):
 
                 if elapsed > _last_query_time + interval - 1:
                     _last_query_time = elapsed
-                    data = session.get(rollcalls_url, headers=headers).json()
+                    response = session.get(rollcalls_url, headers=headers, timeout=REQUEST_TIMEOUT)
+                    response.raise_for_status()
+                    data = response.json()
                     query_count += 1
 
                     live.update(monitor_dashboard(ACCOUNT_NAME, start_time, query_count), refresh=True)
 
                     if temp_data != data:
-                        temp_data = data
-                        if len(temp_data['rollcalls']) > 0:
-                            logger.info("New rollcall detected: count=%s", len(temp_data['rollcalls']))
+                        if len(data['rollcalls']) > 0:
+                            logger.info("New rollcall detected: count=%s", len(data['rollcalls']))
                             live.stop()
                             clear_screen()
                             tui.console.print(tui.frame(tui.Text("Processing new rollcalls…", style="yellow"), "New rollcall detected"))
 
-                            temp_data = process_rollcalls(temp_data, session, account)
+                            temp_data = process_rollcalls(data, session, account)
                             print_separator("=")
                             tui.echo(f"\n{center_text(f'{Colors.GRAY}Press Ctrl+C to exit, continuing monitor...{Colors.ENDC}')}\n")
                             try:
@@ -217,9 +241,28 @@ def start_monitor(account):
                             clear_screen()
                             live.update(monitor_dashboard(ACCOUNT_NAME, start_time, query_count))
                             live.start(refresh=True)
+                        else:
+                            temp_data = data
+                    if recovering:
+                        logger.info("Network recovered; monitoring resumed")
+                        tui.echo("Network recovered; monitoring resumed.")
+                    recovering = False
+                    retry_delay = RETRY_INITIAL_DELAY
             except KeyboardInterrupt:
                 raise
             except Exception as e:
+                if is_retryable(e):
+                    live.stop()
+                    _report_retry(e, retry_delay)
+                    # Re-fetch authoritative state before any further submission.
+                    temp_data = {'rollcalls': []}
+                    recovering = True
+                    time.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2, RETRY_MAX_DELAY)
+                    _last_query_time = -interval
+                    live.update(monitor_dashboard(ACCOUNT_NAME, start_time, query_count))
+                    live.start(refresh=True)
+                    continue
                 live.stop()
                 logger.exception("Monitor exited because of an error: %s", str(e))
                 clear_screen()
