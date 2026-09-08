@@ -28,7 +28,7 @@
 
 ### Windows EXE
 
-从 [Releases](https://github.com/alkali210/XMU-Rollcall-Bot/releases) 下载 `exe`，例如 `xmu-rollcall-3.5.0.0.exe`。双击进入交互菜单，无需安装 Python。
+从 [Releases](https://github.com/alkali210/XMU-Rollcall-Bot/releases) `xmu-rollcall-<version>.exe`。双击进入交互菜单，无需安装 Python。
 
 ### 从源码安装
 
