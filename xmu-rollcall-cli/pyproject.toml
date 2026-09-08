@@ -10,11 +10,12 @@ dependencies = [
     "pycryptodome",
     "xmulogin",
     "click>=8.1.0",
+    "rich>=13.9.0",
     "aiohttp>=3.9.0",
 ]
 
 [project.scripts]
-xmurollcall-cli = "xmu_rollcall.cli:cli"
+xmu-rollcall = "xmu_rollcall.cli:cli"
 
 [tool.setuptools]
 packages = ["xmu_rollcall"]
