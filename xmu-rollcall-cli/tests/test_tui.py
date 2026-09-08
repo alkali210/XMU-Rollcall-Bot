@@ -136,7 +136,7 @@ class TerminalTests(unittest.TestCase):
                 monitor.start_monitor(account)
             self.assertEqual(stopped.exception.code, 0)
             session.get.assert_called_once_with(
-                f"{monitor.base_url}/api/radar/rollcalls", headers=monitor.headers)
+                f"{monitor.base_url}/api/radar/rollcalls", headers=monitor.headers, timeout=monitor.REQUEST_TIMEOUT)
             process.assert_called_once_with({"rollcalls": [{"id": 123}]}, session, account)
             self.assertEqual(live.return_value.start.call_count, 2)
             live.return_value.stop.assert_called()
