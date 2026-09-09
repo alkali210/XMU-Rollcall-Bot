@@ -1,9 +1,11 @@
 import io
+import ssl
 import unittest
 from contextlib import ExitStack
 from unittest.mock import Mock, patch
 
 import requests
+from urllib3.exceptions import MaxRetryError, SSLError as UrllibSSLError
 from rich.console import Console
 
 from xmu_rollcall import monitor, network, utils, verify, rollcall_handler
@@ -18,6 +20,58 @@ def response(data=None, status=200):
 
 
 class NetworkTests(unittest.TestCase):
+    def test_ssl_eof_classification(self):
+        eof = ssl.SSLEOFError(8, "EOF occurred in violation of protocol")
+        wrapped = requests.exceptions.SSLError(
+            MaxRetryError(None, "/api/profile", reason=UrllibSSLError(eof)))
+        self.assertTrue(network.is_retryable(wrapped))
+        self.assertTrue(network.is_retryable(requests.exceptions.SSLError(
+            "[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred")))
+        for error in (ssl.SSLCertVerificationError(1, "certificate failure"),
+                      "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed",
+                      "[SSL: WRONG_VERSION_NUMBER] wrong version number"):
+            self.assertFalse(network.is_retryable(requests.exceptions.SSLError(error)))
+
+    def test_ssl_eof_recovers_in_monitor_and_initialization(self):
+        error = requests.exceptions.SSLError(ssl.SSLEOFError(8, "unexpected EOF"))
+        code, _, session, _, _ = self.run_monitor([error, response(), KeyboardInterrupt()])
+        self.assertEqual(code, 0)
+        self.assertEqual(session.get.call_count, 3)
+        with patch.object(monitor.time, "sleep"), patch.object(monitor, "_report_retry"):
+            self.assertEqual(monitor._retry_initialization(Mock(side_effect=[error, "ok"])), "ok")
+
+    def test_monitor_exits_after_ten_retries(self):
+        code, sleeps, session, _, output = self.run_monitor(
+            [requests.Timeout() for _ in range(11)])
+        self.assertEqual(code, 1)
+        self.assertEqual(session.get.call_count, 11)
+        self.assertEqual(len([s for s in sleeps if s >= 5]), 10)
+        self.assertIn("Retry 10/10", output)
+        self.assertIn("retry limit reached", output)
+
+    def test_success_on_last_retry_resets_budget(self):
+        failures = [requests.ConnectionError() for _ in range(10)]
+        code, _, session, _, _ = self.run_monitor(
+            failures + [response()] + failures + [response(), KeyboardInterrupt()])
+        self.assertEqual(code, 0)
+        self.assertEqual(session.get.call_count, 23)
+
+    def test_initialization_retry_limit_and_last_attempt_success(self):
+        for last in (requests.Timeout(), "ok"):
+            operation = Mock(side_effect=[requests.Timeout() for _ in range(10)] + [last])
+            with patch.object(monitor.time, "sleep") as sleep, patch.object(
+                monitor, "_report_retry"
+            ), patch.object(monitor, "_report_exhausted") as exhausted:
+                if isinstance(last, Exception):
+                    with self.assertRaises(requests.Timeout):
+                        monitor._retry_initialization(operation)
+                    exhausted.assert_called_once()
+                else:
+                    self.assertEqual(monitor._retry_initialization(operation), "ok")
+                    exhausted.assert_not_called()
+                self.assertEqual(operation.call_count, 11)
+                self.assertEqual(sleep.call_count, 10)
+
     def run_monitor(self, outcomes, process=None, interrupt_delay=None):
         session = Mock()
         session.get.side_effect = outcomes

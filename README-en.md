@@ -1,9 +1,10 @@
 # XMU Rollcall Bot
 
 Network recovery is built into the monitor; no watchdog script is required.
-Connection failures, timeouts, truncated transfers, and HTTP 408/429/500/502/503/504
-retry after 5, 10, 20, 40, then 60 seconds, continuing at 60 seconds until recovery
-or Ctrl+C. A successful cycle resets the delay. Failures and recovery are logged.
+Connection failures, timeouts, truncated transfers, unexpected SSL EOF, and HTTP 408/429/500/502/503/504
+retry after 5, 10, 20, 40, then 60 seconds, continuing at 60 seconds. Startup and monitoring allow at most 10 consecutive
+retries after the initial attempt, then exit with an error. Ctrl+C stops early.
+A successful cycle resets both the delay and retry count. Failures and recovery are logged.
 Interrupted rollcall processing re-fetches server state before another submission.
 Monitor and number/radar requests use 10-second connect and 30-second read timeouts;
 attendance waiting retains its 10-second timeout. Transient network exceptions from

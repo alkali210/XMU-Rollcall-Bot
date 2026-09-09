@@ -7,7 +7,7 @@ from xmulogin import xmulogin
 from . import tui
 from rich.live import Live
 from .logging_config import setup_logging
-from .network import REQUEST_TIMEOUT, RETRY_INITIAL_DELAY, RETRY_MAX_DELAY, is_retryable
+from .network import REQUEST_TIMEOUT, RETRY_INITIAL_DELAY, RETRY_MAX_DELAY, MAX_RETRIES, is_retryable
 from .utils import save_session, load_session, verify_session
 from .rollcall_handler import process_rollcalls
 from .config import get_cookies_path, load_config, has_saved_session, get_interval, DEFAULT_INTERVAL
@@ -106,19 +106,30 @@ def print_login_status(message, is_success=True):
 
 def _retry_initialization(operation):
     delay = RETRY_INITIAL_DELAY
+    retries = 0
     while True:
         try:
             return operation()
         except requests.RequestException as exc:
             if not is_retryable(exc):
                 raise
-            _report_retry(exc, delay)
+            if retries >= MAX_RETRIES:
+                _report_exhausted()
+                raise
+            retries += 1
+            _report_retry(exc, delay, retries)
             time.sleep(delay)
             delay = min(delay * 2, RETRY_MAX_DELAY)
 
 
-def _report_retry(exc, delay):
-    message = f"Network temporarily unavailable ({type(exc).__name__}). Retrying in {delay}s. Ctrl+C to exit."
+def _report_exhausted():
+    message = f"Network retry limit reached ({MAX_RETRIES} retries). Exiting."
+    logger.error(message)
+    tui.echo(message)
+
+
+def _report_retry(exc, delay, retries):
+    message = f"Network temporarily unavailable ({type(exc).__name__}). Retry {retries}/{MAX_RETRIES} in {delay}s. Ctrl+C to exit."
     logger.warning(message)
     tui.echo(message)
 
@@ -198,6 +209,7 @@ def start_monitor(account):
     last_display_second = -1
     _last_query_time = -interval # 进入循环时立即查询一次
     retry_delay = RETRY_INITIAL_DELAY
+    retries = 0
     recovering = False
 
     try:
@@ -248,12 +260,14 @@ def start_monitor(account):
                         tui.echo("Network recovered; monitoring resumed.")
                     recovering = False
                     retry_delay = RETRY_INITIAL_DELAY
+                    retries = 0
             except KeyboardInterrupt:
                 raise
             except Exception as e:
-                if is_retryable(e):
+                if is_retryable(e) and retries < MAX_RETRIES:
                     live.stop()
-                    _report_retry(e, retry_delay)
+                    retries += 1
+                    _report_retry(e, retry_delay, retries)
                     # Re-fetch authoritative state before any further submission.
                     temp_data = {'rollcalls': []}
                     recovering = True
@@ -264,6 +278,8 @@ def start_monitor(account):
                     live.start(refresh=True)
                     continue
                 live.stop()
+                if is_retryable(e):
+                    _report_exhausted()
                 logger.exception("Monitor exited because of an error: %s", str(e))
                 clear_screen()
                 tui.echo(f"\n{center_text(f'{Colors.FAIL}{Colors.BOLD}Error occurred:{Colors.ENDC} {str(e)}')}")
