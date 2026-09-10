@@ -1,6 +1,7 @@
 import time
 import builtins
 import logging
+from . import tui
 from .network import is_retryable
 from decimal import Decimal, ROUND_CEILING
 from .verify import send_code, send_radar, base_url
@@ -11,7 +12,8 @@ WAIT_POLL_INTERVAL = 3
 SIGNED_ROLLCALL_STATUS = "on_call_fine"
 
 def log_and_print(*args, **kwargs):
-    builtins.print(*args, **kwargs)
+    if not tui.rollcall_output_active():
+        builtins.print(*args, **kwargs)
     sep = kwargs.get("sep", " ")
     message = sep.join(str(arg) for arg in args).strip()
     if message:
@@ -104,6 +106,7 @@ def wait_for_classmates(session, rollcall_id, settings, number_code=None):
         return
 
     target_label = f"{percentage}% of students" if percentage is not None else f"{target} classmate(s)"
+    tui.update_rollcall(state="waiting", target_label=target_label, number_code=number_code)
     print(f"Waiting for {target_label} to answer before signing...")
     if number_code:
         print(f"Number code: {number_code}")
@@ -117,11 +120,14 @@ def wait_for_classmates(session, rollcall_id, settings, number_code=None):
                 display_target = f"{total} | Target: {percentage}% ({target} students)"
             else:
                 display_target = target
+            tui.update_rollcall(signed=count, total=attendance[1], target=target,
+                                target_label=f"{target_label} ({target} students)" if percentage is not None else target_label)
             print(_wait_status_line(count, display_target, number_code), end="", flush=True)
             if count >= target:
                 print()
                 return
         else:
+            tui.update_rollcall(signed=None, total=None)
             code_text = f" | Number code: {number_code}" if number_code else ""
             print(f"\r  Signed: unknown | Target: {target_label}, retrying...{code_text}", end="", flush=True)
 
@@ -169,6 +175,7 @@ def handle_rollcalls(data, session, account=None):
     if count:
         print(time.strftime("%H:%M:%S", time.localtime()), f"New rollcall(s) found!\n")
         for i in range(count):
+            tui.update_rollcall(rollcall=rollcalls[i], index=i + 1, count=count)
             print(f"{i+1} of {count}:")
             print(f"Course name: {rollcalls[i]['course_title']}, rollcall created by {rollcalls[i]['department_name']} {rollcalls[i]['created_by_name']}.")
 
@@ -182,25 +189,32 @@ def handle_rollcalls(data, session, account=None):
 
             if (rollcalls[i]['status'] == 'absent') & (rollcalls[i]['is_number']) & (not rollcalls[i]['is_radar']):
                 def before_submit(_number_code, _status, _end_time, rollcall_id=rollcalls[i]['rollcall_id']):
+                    tui.update_rollcall(number_code=_number_code)
                     wait_for_classmates(session, rollcall_id, settings, number_code=_number_code)
+                    tui.update_rollcall(state="submitting")
 
                 if send_code(session, rollcalls[i]['rollcall_id'], before_submit=before_submit):
                     answer_status[i] = True
                 else:
                     print("Answering failed.")
+                tui.update_rollcall(state="success" if answer_status[i] else "failed")
             elif rollcalls[i]['status'] == 'on_call_fine':
                 print("Already answered.")
                 answer_status[i] = True
+                tui.update_rollcall(state="already")
             elif rollcalls[i]['is_radar']:
                 wait_for_classmates(session, rollcalls[i]['rollcall_id'], settings)
+                tui.update_rollcall(state="submitting")
                 if send_radar(session, rollcalls[i]['rollcall_id']):
                     answer_status[i] = True
                 else:
                     print("Answering failed.")
+                tui.update_rollcall(state="success" if answer_status[i] else "failed")
             else:
                 # TODO: qrcode rollcall
                 print("Answering failed. QRcode rollcall not supported yet.")
                 print("Waiting for 5 minutes before next attempt...")
+                tui.update_rollcall(state="unsupported")
                 time.sleep(300)
 
     return answer_status

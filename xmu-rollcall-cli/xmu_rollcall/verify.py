@@ -4,6 +4,7 @@ import math
 import builtins
 import logging
 import requests
+from . import tui
 from .network import REQUEST_TIMEOUT, is_retryable
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,8 @@ headers = {
 
 
 def log_and_print(*args, **kwargs):
-    builtins.print(*args, **kwargs)
+    if not tui.rollcall_output_active():
+        builtins.print(*args, **kwargs)
     sep = kwargs.get("sep", " ")
     message = sep.join(str(arg) for arg in args).strip()
     if message:
@@ -126,6 +128,7 @@ def submit_number_code(in_session, rollcall_id, number_code, status=None, end_ti
         response.raise_for_status()
         if response.status_code == 200:
             print("Number code rollcall answered successfully.")
+            tui.update_rollcall(state="success")
             time.sleep(5)
             t01 = time.time()
             print(f"Time: {t01 - t00:.2f} s.")

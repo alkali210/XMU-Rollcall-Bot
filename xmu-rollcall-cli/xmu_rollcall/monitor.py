@@ -223,15 +223,12 @@ def start_monitor(account):
                             logger.info("New rollcall detected: count=%s", len(data['rollcalls']))
                             live.stop()
                             clear_screen()
-                            tui.console.print(tui.frame(tui.Text("Processing new rollcalls…", style="yellow"), "New rollcall detected"))
-
-                            temp_data = process_rollcalls(data, session, account)
-                            print_separator("=")
-                            tui.echo(f"\n{center_text(f'{Colors.GRAY}Press Ctrl+C to exit, continuing monitor...{Colors.ENDC}')}\n")
-                            try:
+                            with tui.rollcall_activity(
+                                ACCOUNT_NAME or USERNAME,
+                                format_time(int(time.time() - start_time)), query_count, interval,
+                            ):
+                                temp_data = process_rollcalls(data, session, account)
                                 time.sleep(3)
-                            except KeyboardInterrupt:
-                                raise
                             clear_screen()
                             live.update(monitor_dashboard(ACCOUNT_NAME, start_time, query_count))
                             live.start(refresh=True)
