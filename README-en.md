@@ -5,12 +5,12 @@ Connection failures, timeouts, truncated transfers, and HTTP 408/429/500/502/503
 retry after 5, 10, 20, 40, then 60 seconds, continuing at 60 seconds for at most
 10 retries after the initial request. If all retries fail, an error is displayed
 and the program exits. Ctrl+C exits during the wait. A successful cycle resets
-the delay and retry count. Startup session validation and login use the same
-10-retry limit. Failures and recovery are logged.
+the delay and retry count. SSL unexpected EOF errors
+(`UNEXPECTED_EOF_WHILE_READING`) also trigger backoff retries. Failures and recovery are logged.
 Interrupted rollcall processing re-fetches server state before another submission.
 Monitor and number/radar requests use 10-second connect and 30-second read timeouts;
-attendance waiting retains its 10-second timeout. Transient network exceptions from
-cached-session validation and startup login are also retried; the external login
+attendance waiting retains its 10-second timeout. Exceptions from cached-session
+validation and startup login fail immediately without backoff retries; the external login
 library still controls its own internal timeouts and error return behavior.
 Authentication, certificate, malformed-response, and programming errors are not
 retried indefinitely. An outage can still cause an expired rollcall to be missed.

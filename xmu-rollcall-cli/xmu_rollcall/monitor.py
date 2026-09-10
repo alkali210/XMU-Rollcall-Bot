@@ -104,34 +104,17 @@ def print_login_status(message, is_success=True):
         logger.warning(f"[FAILED] {message}")
 
 
-def _retry_initialization(operation):
-    delay = RETRY_INITIAL_DELAY
-    retries = 0
-    while True:
-        try:
-            return operation()
-        except requests.RequestException as exc:
-            if not is_retryable(exc):
-                raise
-            if retries >= RETRY_MAX_ATTEMPTS:
-                _report_retry_limit()
-                raise
-            retries += 1
-            _report_retry(exc, delay)
-            time.sleep(delay)
-            delay = min(delay * 2, RETRY_MAX_DELAY)
-
-
-def _report_retry_limit():
-    message = f"Network retry limit reached ({RETRY_MAX_ATTEMPTS} retries). Exiting..."
+def _report_retry_limit(exc):
+    message = f"{type(exc).__name__}: {exc}\nNetwork retry limit reached ({RETRY_MAX_ATTEMPTS} retries). Exiting..."
     logger.error(message)
-    tui.echo(message)
+    tui.console.print(tui.Text(message, style="red"))
 
 
-def _report_retry(exc, delay):
-    message = f"Network temporarily unavailable ({type(exc).__name__}). Retrying in {delay}s. Ctrl+C to exit."
+def _report_retry(exc, delay, retries):
+    message = (f"{type(exc).__name__}: {exc}\n"
+               f"Network temporarily unavailable. Retry {retries}/{RETRY_MAX_ATTEMPTS} in {delay}s. Ctrl+C to exit.")
     logger.warning(message)
-    tui.echo(message)
+    tui.console.print(tui.Text(message, style="red"))
 
 def start_monitor(account):
     """启动监控程序"""
@@ -166,7 +149,7 @@ def start_monitor(account):
         tui.echo(f"{Colors.OKCYAN}[Step 2/3]{Colors.ENDC} Found cached session, attempting to restore...")
         session_candidate = requests.Session()
         if load_session(session_candidate, ACCOUNT_ID):
-            profile = _retry_initialization(lambda: verify_session(session_candidate))
+            profile = verify_session(session_candidate)
             if profile:
                 session = session_candidate
                 print_login_status("Session restored successfully", True)
@@ -178,8 +161,7 @@ def start_monitor(account):
     if not session:
         tui.echo(f"{Colors.OKCYAN}[Step 2/3]{Colors.ENDC} Logging in with credentials...")
         time.sleep(2)
-        session = _retry_initialization(
-            lambda: xmulogin(type=3, username=USERNAME, password=PASSWORD))
+        session = xmulogin(type=3, username=USERNAME, password=PASSWORD)
         if session:
             save_session(session, ACCOUNT_ID)
             print_login_status("Login successful", True)
@@ -267,10 +249,10 @@ def start_monitor(account):
                 if is_retryable(e):
                     live.stop()
                     if retries >= RETRY_MAX_ATTEMPTS:
-                        _report_retry_limit()
+                        _report_retry_limit(e)
                         sys.exit(1)
                     retries += 1
-                    _report_retry(e, retry_delay)
+                    _report_retry(e, retry_delay, retries)
                     # Re-fetch authoritative state before any further submission.
                     temp_data = {'rollcalls': []}
                     recovering = True

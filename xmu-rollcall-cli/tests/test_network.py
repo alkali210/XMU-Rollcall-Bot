@@ -1,10 +1,12 @@
 import io
+import ssl
 import unittest
 from contextlib import ExitStack
 from unittest.mock import Mock, patch
 
 import requests
 from rich.console import Console
+from urllib3.exceptions import MaxRetryError, SSLError as UrllibSSLError
 
 from xmu_rollcall import monitor, network, utils, verify, rollcall_handler
 
@@ -18,6 +20,27 @@ def response(data=None, status=200):
 
 
 class NetworkTests(unittest.TestCase):
+    def test_retry_reports_original_error_in_red(self):
+        error = requests.ConnectionError("Connection reset [details]\nOriginal server error")
+        with patch.object(monitor.tui.console, "print") as output, patch.object(monitor.logger, "warning") as log:
+            monitor._report_retry(error, 5, 1)
+        rendered = output.call_args.args[0]
+        self.assertEqual(rendered.style, "red")
+        self.assertIn(str(error), rendered.plain)
+        self.assertIn("ConnectionError:", rendered.plain)
+        self.assertIn("Retry 1/10 in 5s", rendered.plain)
+        log.assert_called_once_with(rendered.plain)
+
+    def test_retry_limit_reports_last_error_in_red(self):
+        error = requests.Timeout("Read timed out")
+        with patch.object(monitor.tui.console, "print") as output, patch.object(monitor.logger, "error") as log:
+            monitor._report_retry_limit(error)
+        rendered = output.call_args.args[0]
+        self.assertEqual(rendered.style, "red")
+        self.assertIn("Timeout: Read timed out", rendered.plain)
+        self.assertIn("retry limit reached (10 retries)", rendered.plain)
+        log.assert_called_once_with(rendered.plain)
+
     def run_monitor(self, outcomes, process=None, interrupt_delay=None):
         session = Mock()
         session.get.side_effect = outcomes
@@ -76,22 +99,46 @@ class NetworkTests(unittest.TestCase):
         self.assertEqual(session.get.call_count, 23)
         self.assertEqual([s for s in sleeps if s >= 5], ([5, 10, 20, 40] + [60] * 6) * 2)
 
-    def test_initialization_stops_after_ten_retries(self):
-        error = requests.Timeout()
-        operation = Mock(side_effect=error)
-        with patch.object(monitor.time, "sleep") as sleep, patch.object(monitor.tui, "echo"):
-            with self.assertRaises(requests.Timeout) as raised:
-                monitor._retry_initialization(operation)
-        self.assertIs(raised.exception, error)
-        self.assertEqual(operation.call_count, 11)
-        self.assertEqual(sleep.call_count, 10)
+    def test_startup_network_errors_fail_without_retry(self):
+        for cached in (True, False):
+            with self.subTest(cached=cached), ExitStack() as stack:
+                for name, value in {
+                    "setup_logging": None, "_load_monitor_settings": 10,
+                    "has_saved_session": cached, "load_session": True,
+                    "clear_screen": None,
+                }.items():
+                    stack.enter_context(patch.object(monitor, name, return_value=value))
+                stack.enter_context(patch.object(monitor.os.path, "exists", return_value=False))
+                stack.enter_context(patch.object(monitor.tui, "console", Console(file=io.StringIO())))
+                sleep = stack.enter_context(patch.object(monitor.time, "sleep"))
+                retry = stack.enter_context(patch.object(monitor, "_report_retry"))
+                error = requests.Timeout("startup failure")
+                operation = stack.enter_context(patch.object(
+                    monitor, "verify_session" if cached else "xmulogin", side_effect=error))
+                with self.assertRaises(requests.Timeout) as raised:
+                    monitor.start_monitor({"id": 1, "username": "test", "password": "unused"})
+                self.assertIs(raised.exception, error)
+                operation.assert_called_once()
+                retry.assert_not_called()
+                self.assertFalse(any(call.args[0] >= 5 for call in sleep.call_args_list))
 
-    def test_initialization_last_retry_can_succeed(self):
-        operation = Mock(side_effect=[requests.Timeout() for _ in range(10)] + ["ok"])
-        with patch.object(monitor.time, "sleep") as sleep, patch.object(monitor.tui, "echo"):
-            self.assertEqual(monitor._retry_initialization(operation), "ok")
-        self.assertEqual(operation.call_count, 11)
-        self.assertEqual(sleep.call_count, 10)
+    def test_ssl_eof_recovers_with_backoff(self):
+        eof = ssl.SSLEOFError(8, "[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol")
+        wrapped = requests.exceptions.SSLError(MaxRetryError(
+            None, "/api/radar/rollcalls", reason=UrllibSSLError(eof)))
+        for error in (wrapped, requests.exceptions.SSLError(str(wrapped)),
+                      requests.exceptions.SSLError(ssl.SSLEOFError(8, "EOF"))):
+            with self.subTest(error=error):
+                code, sleeps, _, _, output = self.run_monitor([error, response(), KeyboardInterrupt()])
+                self.assertEqual(code, 0)
+                self.assertEqual([s for s in sleeps if s >= 5], [5])
+                self.assertIn("Network recovered", output)
+
+    def test_certificate_and_other_ssl_errors_are_not_retryable(self):
+        for error in (ssl.SSLCertVerificationError(1, "CERTIFICATE_VERIFY_FAILED"),
+                      ssl.SSLError(1, "WRONG_VERSION_NUMBER")):
+            wrapped = requests.exceptions.SSLError(MaxRetryError(None, "/", reason=UrllibSSLError(error)))
+            self.assertFalse(network.is_retryable(wrapped))
 
     def test_transient_http_and_truncated_response_recover(self):
         code, sleeps, _, _, _ = self.run_monitor([
@@ -121,13 +168,6 @@ class NetworkTests(unittest.TestCase):
                 self.assertEqual(code, 1)
                 self.assertEqual(session.get.call_count, 1)
                 self.assertNotIn(5, sleeps)
-
-    def test_initialization_retries_transport_errors_only(self):
-        operation = Mock(side_effect=[requests.ConnectionError(), requests.Timeout(), "ok"])
-        with patch.object(monitor.time, "sleep") as sleep, patch.object(monitor, "_report_retry"):
-            self.assertEqual(monitor._retry_initialization(operation), "ok")
-        self.assertEqual([call.args[0] for call in sleep.call_args_list], [5, 10])
-        self.assertIsNone(monitor._retry_initialization(lambda: None))
 
     def test_cached_session_network_failure_is_not_expiration(self):
         session = Mock()
