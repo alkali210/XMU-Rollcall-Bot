@@ -2,8 +2,11 @@
 
 Network recovery is built into the monitor; no watchdog script is required.
 Connection failures, timeouts, truncated transfers, and HTTP 408/429/500/502/503/504
-retry after 5, 10, 20, 40, then 60 seconds, continuing at 60 seconds until recovery
-or Ctrl+C. A successful cycle resets the delay. Failures and recovery are logged.
+retry after 5, 10, 20, 40, then 60 seconds, continuing at 60 seconds for at most
+10 retries after the initial request. If all retries fail, an error is displayed
+and the program exits. Ctrl+C exits during the wait. A successful cycle resets
+the delay and retry count. Startup session validation and login use the same
+10-retry limit. Failures and recovery are logged.
 Interrupted rollcall processing re-fetches server state before another submission.
 Monitor and number/radar requests use 10-second connect and 30-second read timeouts;
 attendance waiting retains its 10-second timeout. Transient network exceptions from

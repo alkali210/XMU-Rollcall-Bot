@@ -4,6 +4,7 @@ import requests
 REQUEST_TIMEOUT = (10, 30)
 RETRY_INITIAL_DELAY = 5
 RETRY_MAX_DELAY = 60
+RETRY_MAX_ATTEMPTS = 10
 
 
 def is_retryable(exc):

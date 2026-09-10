@@ -7,7 +7,7 @@ from xmulogin import xmulogin
 from . import tui
 from rich.live import Live
 from .logging_config import setup_logging
-from .network import REQUEST_TIMEOUT, RETRY_INITIAL_DELAY, RETRY_MAX_DELAY, is_retryable
+from .network import REQUEST_TIMEOUT, RETRY_INITIAL_DELAY, RETRY_MAX_DELAY, RETRY_MAX_ATTEMPTS, is_retryable
 from .utils import save_session, load_session, verify_session
 from .rollcall_handler import process_rollcalls
 from .config import get_cookies_path, load_config, has_saved_session, get_interval, DEFAULT_INTERVAL
@@ -106,15 +106,26 @@ def print_login_status(message, is_success=True):
 
 def _retry_initialization(operation):
     delay = RETRY_INITIAL_DELAY
+    retries = 0
     while True:
         try:
             return operation()
         except requests.RequestException as exc:
             if not is_retryable(exc):
                 raise
+            if retries >= RETRY_MAX_ATTEMPTS:
+                _report_retry_limit()
+                raise
+            retries += 1
             _report_retry(exc, delay)
             time.sleep(delay)
             delay = min(delay * 2, RETRY_MAX_DELAY)
+
+
+def _report_retry_limit():
+    message = f"Network retry limit reached ({RETRY_MAX_ATTEMPTS} retries). Exiting..."
+    logger.error(message)
+    tui.echo(message)
 
 
 def _report_retry(exc, delay):
@@ -198,6 +209,7 @@ def start_monitor(account):
     last_display_second = -1
     _last_query_time = -interval # 进入循环时立即查询一次
     retry_delay = RETRY_INITIAL_DELAY
+    retries = 0
     recovering = False
 
     try:
@@ -248,11 +260,16 @@ def start_monitor(account):
                         tui.echo("Network recovered; monitoring resumed.")
                     recovering = False
                     retry_delay = RETRY_INITIAL_DELAY
+                    retries = 0
             except KeyboardInterrupt:
                 raise
             except Exception as e:
                 if is_retryable(e):
                     live.stop()
+                    if retries >= RETRY_MAX_ATTEMPTS:
+                        _report_retry_limit()
+                        sys.exit(1)
+                    retries += 1
                     _report_retry(e, retry_delay)
                     # Re-fetch authoritative state before any further submission.
                     temp_data = {'rollcalls': []}

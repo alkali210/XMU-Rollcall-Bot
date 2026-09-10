@@ -60,6 +60,39 @@ class NetworkTests(unittest.TestCase):
         for call in session.get.call_args_list:
             self.assertEqual(call.kwargs["timeout"], network.REQUEST_TIMEOUT)
 
+    def test_monitor_stops_after_ten_retries(self):
+        code, sleeps, session, _, output = self.run_monitor(
+            [requests.ConnectionError() for _ in range(11)])
+        self.assertEqual(code, 1)
+        self.assertEqual(session.get.call_count, 11)
+        self.assertEqual([s for s in sleeps if s >= 5], [5, 10, 20, 40] + [60] * 6)
+        self.assertIn("retry limit reached (10 retries)", output)
+
+    def test_last_retry_can_recover_and_reset_count(self):
+        code, sleeps, session, _, _ = self.run_monitor(
+            [requests.Timeout() for _ in range(10)] + [response()] +
+            [requests.Timeout() for _ in range(10)] + [response(), KeyboardInterrupt()])
+        self.assertEqual(code, 0)
+        self.assertEqual(session.get.call_count, 23)
+        self.assertEqual([s for s in sleeps if s >= 5], ([5, 10, 20, 40] + [60] * 6) * 2)
+
+    def test_initialization_stops_after_ten_retries(self):
+        error = requests.Timeout()
+        operation = Mock(side_effect=error)
+        with patch.object(monitor.time, "sleep") as sleep, patch.object(monitor.tui, "echo"):
+            with self.assertRaises(requests.Timeout) as raised:
+                monitor._retry_initialization(operation)
+        self.assertIs(raised.exception, error)
+        self.assertEqual(operation.call_count, 11)
+        self.assertEqual(sleep.call_count, 10)
+
+    def test_initialization_last_retry_can_succeed(self):
+        operation = Mock(side_effect=[requests.Timeout() for _ in range(10)] + ["ok"])
+        with patch.object(monitor.time, "sleep") as sleep, patch.object(monitor.tui, "echo"):
+            self.assertEqual(monitor._retry_initialization(operation), "ok")
+        self.assertEqual(operation.call_count, 11)
+        self.assertEqual(sleep.call_count, 10)
+
     def test_transient_http_and_truncated_response_recover(self):
         code, sleeps, _, _, _ = self.run_monitor([
             response(status=503), requests.exceptions.ChunkedEncodingError(),
