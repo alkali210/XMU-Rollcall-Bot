@@ -16,13 +16,7 @@
 - 支持多账号，并在 SQLite 中加密存储账号信息和会话
 - 在日志文件中记录签到状态
 - 更友好的交互界面
-
-<details>
-<summary>运行截图</summary>
-<img src="screenshots/1.png" alt="screenshot_1" width="100%">
-<br><br>
-<img src="screenshots/2.png" alt="screenshot_2" width="100%">
-</details>
+- 监控过程中断线自动重试恢复
 
 ## 安装
 
@@ -83,28 +77,37 @@ uv run xmu-rollcall [option] # 如果使用 uv
 
 ```jsonc
 {
-  "interval": 15,
   "current_account_id": 1,
+  "interval": 30.0, // 监控间隔
+  "disable_monitor_retry": true, // 监控错误重试
   "accounts": [
     {
       "id": 1,
       "rollcall_settings": {
-        "wait_before_answer": 5
+        "wait_before_answer": "30.0%" // 等待同学签到
       }
     },
     {
       "id": 2,
       "rollcall_settings": {
-        "wait_before_answer": false
+        "wait_before_answer": 10
       }
     }
   ]
 }
 ```
 
+> 如果直接编辑此文件，会在下次启动时生效。
+
 ### 监控间隔
 
-在配置菜单中按 `i` 设置监控间隔，对所有账号生效（默认：10 秒，支持正数秒值）。也可以直接编辑 `config.json`，下次启动监控时生效。
+在配置菜单中按 `i` 设置监控间隔，对所有账号生效（默认：10 秒，支持正数秒值）。
+
+### 监控错误重试
+
+监控阶段出现连接中断，连接/读取超时，响应传输中断，`HTTP 408/429/500/502/503/504`，`UNEXPECTED_SSL_EOF` 时，程序默认会按 5, 10, 20, 40, 60 秒退避重试，之后每 60 秒重试，最多 10 次，期间可按 `Ctrl+C` 退出。
+
+`disable_monitor_retry` 设为 `true` 时，监控阶段出错直接报错退出，不进行重试。在配置菜单中按 `r` 可以切换此选项。
 
 ### 等待同学签到
 

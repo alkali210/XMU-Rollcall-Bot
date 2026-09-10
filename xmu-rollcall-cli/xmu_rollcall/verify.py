@@ -4,6 +4,8 @@ import math
 import builtins
 import logging
 import requests
+from . import tui
+from .network import REQUEST_TIMEOUT, is_retryable
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +23,8 @@ headers = {
 
 
 def log_and_print(*args, **kwargs):
-    builtins.print(*args, **kwargs)
+    if not tui.rollcall_output_active():
+        builtins.print(*args, **kwargs)
     sep = kwargs.get("sep", " ")
     message = sep.join(str(arg) for arg in args).strip()
     if message:
@@ -87,10 +90,14 @@ def get_number_rollcall_info(in_session, rollcall_id):
     code_url = f"{base_url}/api/rollcall/{rollcall_id}/student_rollcalls"
     request_headers = _api_headers(in_session)
     try:
-        code_response = in_session.get(code_url, headers=request_headers)
+        code_response = in_session.get(code_url, headers=request_headers, timeout=REQUEST_TIMEOUT)
     except requests.RequestException as e:
+        if is_retryable(e):
+            raise
         return None, None, None, f"Failed to request number code API: {e}"
 
+    if code_response.status_code in (408, 429, 500, 502, 503, 504):
+        code_response.raise_for_status()
     if code_response.status_code != 200:
         return None, None, None, f"Failed to get number code. Status: {code_response.status_code}"
 
@@ -117,9 +124,11 @@ def submit_number_code(in_session, rollcall_id, number_code, status=None, end_ti
     }
     request_headers = _api_headers(in_session)
     try:
-        response = in_session.put(answer_url, json=payload, headers=request_headers)
+        response = in_session.put(answer_url, json=payload, headers=request_headers, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
         if response.status_code == 200:
             print("Number code rollcall answered successfully.")
+            tui.update_rollcall(state="success")
             time.sleep(5)
             t01 = time.time()
             print(f"Time: {t01 - t00:.2f} s.")
@@ -128,6 +137,8 @@ def submit_number_code(in_session, rollcall_id, number_code, status=None, end_ti
         print(f"Failed to submit number code. Status: {response.status_code}\nTime: {t01 - t00:.2f} s.")
         return False
     except requests.RequestException as e:
+        if is_retryable(e):
+            raise
         t01 = time.time()
         print(f"Failed to submit number code: {e}\nTime: {t01 - t00:.2f} s.")
         return False
@@ -183,13 +194,17 @@ def send_radar(in_session, rollcall_id):
             "speed": None
         }
 
-    res_1 = in_session.put(url, json=payload(lat_1, lon_1), headers=headers)
+    res_1 = in_session.put(url, json=payload(lat_1, lon_1), headers=headers, timeout=REQUEST_TIMEOUT)
+    if res_1.status_code in (408, 429, 500, 502, 503, 504):
+        res_1.raise_for_status()
     data_1 = res_1.json()
 
     if res_1.status_code == 200:
         return True
 
-    res_2 = in_session.put(url, json=payload(lat_2, lon_2), headers=headers)
+    res_2 = in_session.put(url, json=payload(lat_2, lon_2), headers=headers, timeout=REQUEST_TIMEOUT)
+    if res_2.status_code in (408, 429, 500, 502, 503, 504):
+        res_2.raise_for_status()
     data_2 = res_2.json()
 
     if res_2.status_code == 200:
@@ -252,12 +267,16 @@ def send_radar(in_session, rollcall_id):
     payload_1 = payload(sol_x_1, sol_y_1)
     payload_2 = payload(sol_x_2, sol_y_2)
 
-    res_3 = in_session.put(url, json=payload_1, headers=headers)
+    res_3 = in_session.put(url, json=payload_1, headers=headers, timeout=REQUEST_TIMEOUT)
+    if res_3.status_code in (408, 429, 500, 502, 503, 504):
+        res_3.raise_for_status()
     if res_3.status_code == 200:
         return True
     else:
         print(res_3.json())
-        res_4 = in_session.put(url, json=payload_2, headers=headers)
+        res_4 = in_session.put(url, json=payload_2, headers=headers, timeout=REQUEST_TIMEOUT)
+        if res_4.status_code in (408, 429, 500, 502, 503, 504):
+            res_4.raise_for_status()
         if res_4.status_code == 200:
             return True
 

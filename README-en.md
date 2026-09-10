@@ -1,5 +1,22 @@
 # XMU Rollcall Bot
 
+Network recovery is built into the monitor; no watchdog script is required.
+Connection failures, timeouts, truncated transfers, and HTTP 408/429/500/502/503/504
+retry after 5, 10, 20, 40, then 60 seconds, continuing at 60 seconds for at most
+10 retries after the initial request. If all retries fail, an error is displayed
+and the program exits. Ctrl+C exits during the wait. A successful cycle resets
+the delay and retry count. SSL unexpected EOF errors
+(`UNEXPECTED_EOF_WHILE_READING`) also trigger backoff retries. Failures and recovery are logged.
+Interrupted rollcall processing re-fetches server state before another submission.
+Monitor and number/radar requests use 10-second connect and 30-second read timeouts;
+attendance waiting retains its 10-second timeout. Exceptions from cached-session
+validation and startup login fail immediately without backoff retries; the external login
+library still controls its own internal timeouts and error return behavior.
+Authentication, certificate, malformed-response, and programming errors are not
+retried indefinitely. An outage can still cause an expired rollcall to be missed.
+An external supervisor can cover process crashes in unattended deployments, but
+adds deployment and shutdown complexity and cannot recover application state.
+
 **English** | [简体中文](README.md)
 
 > This project is forked from [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot).
@@ -87,6 +104,10 @@ Press `i` in the configuration menu to set the polling interval (positive second
   ]
 }
 ```
+
+### Monitor error retries
+
+Press `r` in configuration to toggle and save `disable_monitor_retry` for all accounts (default: `false`). With `true`, monitoring exits on errors without backoff retries; `false` keeps up to 10 network retries. You can also set this boolean at the top level of `config.json`; it takes effect on the next monitor start. Startup never uses backoff retries.
 
 ### Waiting for classmates
 

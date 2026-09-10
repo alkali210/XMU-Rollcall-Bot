@@ -3,15 +3,128 @@
 import click
 import time
 from colorsys import hsv_to_rgb
+from contextlib import contextmanager
+from contextvars import ContextVar
 from rich import box
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+from rich.live import Live
+from rich.progress_bar import ProgressBar
 
 from . import __version__
 
 console = Console(highlight=False)
+_rollcall_view = ContextVar("rollcall_view", default=None)
+
+
+def rollcall_output_active():
+    return _rollcall_view.get() is not None
+
+
+def update_rollcall(**changes):
+    view = _rollcall_view.get()
+    if view is not None:
+        view.update(**changes)
+
+
+class RollcallView:
+    """Presentation state scoped to one batch; never performs account operations."""
+
+    def __init__(self, name, runtime, queries, interval):
+        self.system = menu_rows([
+            ("Account", str(name)), ("Detected at", time.strftime("%H:%M:%S")),
+            ("Running time", runtime), ("Queries", str(queries)),
+        ], key_style="magenta")
+        self.interval = interval
+        self.data = {}
+        self.results = []
+        self.live = None
+
+    def update(self, **changes):
+        if "rollcall" in changes:
+            if self.data:
+                self.results.append(Text.assemble(
+                    (f"{self.data['index']}. ", "cyan"),
+                    (str(self.data["rollcall"]["course_title"]), "default"),
+                    (f" · {self.data['state']}", "dim")))
+            self.data = {"state": "detected", "number_code": None,
+                         "signed": None, "total": None, "target": None}
+        self.data.update(changes)
+        self.live.update(self.render(), refresh=True)
+
+    def render(self):
+        data = self.data
+        if not data:
+            return frame(Text("Reading rollcall details…"), "Rollcall activity")
+        state = data["state"]
+        title, color, detail = {
+            "detected": ("New rollcall found", "cyan", "Reading rollcall details"),
+            "waiting": ("Waiting for classmates", "yellow", "Submit when the target is reached"),
+            "submitting": ("Submitting answer", "cyan", "Waiting for confirmation"),
+            "success": ("Rollcall answered", "green", "Answer confirmed"),
+            "failed": ("Answering failed", "red", "No confirmation received · see log for details"),
+            "already": ("Already answered", "green", "No submission needed"),
+            "unsupported": ("QRcode not supported", "yellow", "Please sign in manually · next attempt in 5 minutes"),
+            "interrupted": ("Interrupted", "yellow", "Processing stopped"),
+        }[state]
+        rollcall = data["rollcall"]
+        kind = "Radar" if rollcall["is_radar"] else "Number" if rollcall["is_number"] else "QRcode"
+        content = [menu_rows([
+            ("Course", str(rollcall["course_title"])),
+            ("Created by", f"{rollcall['department_name']} · {rollcall['created_by_name']}"),
+            ("Type", f"{kind} rollcall"),
+        ]), Text("")]
+        if data["number_code"] is not None:
+            content.extend([Text.assemble(("Number code   ", "dim"),
+                                          (str(data["number_code"]), "bold yellow")), Text("")])
+        if data.get("target_label"):
+            signed, total, target = data["signed"], data["total"], data["target"]
+            count = "unknown" if signed is None else f"{signed} / {total}"
+            content.append(Text(f"Classmates signed: {count} · Target: {data['target_label']}", style="yellow"))
+            if signed is not None and target is not None and target > 0:
+                content.append(ProgressBar(total=target, completed=min(signed, target),
+                                           complete_style="yellow", finished_style="green"))
+            elif state == "waiting":
+                content.append(Text("Attendance unavailable · retrying…", style="dim"))
+            content.append(Text(""))
+        content.extend([Text(f"● {title}", style=f"bold {color}"), Text(detail, style="dim")])
+        monitor = Group(Text("● Active", style="bold green"), Text(""),
+                        Text(f"{data['count']} rollcall(s) in this batch"),
+                        Text(f"Checking every {self.interval} second(s)", style="dim"))
+        steps = Text()
+        labels = ["Detected", "Waiting", "Submitting", "Confirmed"]
+        active = {"detected": 0, "waiting": 1, "submitting": 2}.get(state, 3)
+        if state in {"already", "unsupported", "interrupted"}:
+            labels, active = ["Detected", title], 1
+        elif state == "failed":
+            labels[-1] = "Failed"
+        for index, label in enumerate(labels):
+            if index:
+                steps.append("  >  ", "bright_black")
+            steps.append(label, f"bold {color}" if index == active else "dim")
+        return frame(Group(
+            sections(panel(self.system, "System status", "blue"), panel(monitor, "Rollcall monitor")),
+            Text(""), panel(Group(*content), f"Rollcall · {data['index']} of {data['count']}", color),
+            Text(""), steps, *self.results,
+        ), "Rollcall activity", subtitle="Ctrl+C to exit")
+
+
+@contextmanager
+def rollcall_activity(name, runtime, queries, interval):
+    view = RollcallView(name, runtime, queries, interval)
+    with Live(view.render(), console=console, auto_refresh=False) as live:
+        view.live = live
+        token = _rollcall_view.set(view)
+        try:
+            yield view
+        except BaseException as exc:
+            if view.data:
+                view.update(state="interrupted" if isinstance(exc, KeyboardInterrupt) else "failed")
+            raise
+        finally:
+            _rollcall_view.reset(token)
 
 
 def panel(content, title, style="cyan"):

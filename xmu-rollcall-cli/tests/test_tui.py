@@ -122,7 +122,7 @@ class TerminalTests(unittest.TestCase):
         session.get.return_value.json.return_value = {"rollcalls": [{"id": 123}]}
         # Initialization, first poll, post-rollcall delay, then user interruption.
         with patch.object(monitor, "setup_logging"), patch.object(
-            monitor, "_load_monitor_settings", return_value=10
+            monitor, "_load_monitor_settings", return_value=(10, False)
         ), patch.object(monitor, "has_saved_session", return_value=True), patch.object(
             monitor.requests, "Session", return_value=session
         ), patch.object(monitor, "load_session", return_value=True), patch.object(
@@ -136,7 +136,7 @@ class TerminalTests(unittest.TestCase):
                 monitor.start_monitor(account)
             self.assertEqual(stopped.exception.code, 0)
             session.get.assert_called_once_with(
-                f"{monitor.base_url}/api/radar/rollcalls", headers=monitor.headers)
+                f"{monitor.base_url}/api/radar/rollcalls", headers=monitor.headers, timeout=monitor.REQUEST_TIMEOUT)
             process.assert_called_once_with({"rollcalls": [{"id": 123}]}, session, account)
             self.assertEqual(live.return_value.start.call_count, 2)
             live.return_value.stop.assert_called()

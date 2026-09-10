@@ -3,6 +3,7 @@ import json
 import requests
 from . import secure_store
 from .config import get_cookies_path
+from .network import REQUEST_TIMEOUT
 
 base_url = "https://lnt.xmu.edu.cn"
 headers = {
@@ -63,11 +64,15 @@ def load_session(sess: requests.Session, path: str):
 def verify_session(sess: requests.Session) -> dict:
     """验证session是否有效"""
     try:
-        resp = sess.get(f"{base_url}/api/profile", headers=headers)
+        resp = sess.get(f"{base_url}/api/profile", headers=headers, timeout=REQUEST_TIMEOUT)
+        if resp.status_code not in (401, 403):
+            resp.raise_for_status()
         if resp.status_code == 200:
             data = resp.json()
             if isinstance(data, dict) and "name" in data:
                 return data
-    except Exception:
+    except requests.RequestException:
+        raise
+    except ValueError:
         pass
     return {}

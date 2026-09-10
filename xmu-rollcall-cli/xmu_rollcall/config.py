@@ -43,9 +43,14 @@ DEFAULT_CONFIG = {
     "accounts": [],
     "current_account_id": None,
     "interval": 10,
+    "disable_monitor_retry": False,
 }
 
 DEFAULT_INTERVAL = 10
+
+
+def get_disable_monitor_retry(config):
+    return config.get("disable_monitor_retry", False) is True
 
 
 def get_interval(config):
@@ -124,6 +129,7 @@ def _with_stored_accounts(config, accounts):
             "rollcall_settings", account.get("rollcall_settings", {})),
     }) for account in accounts]
     config["interval"] = get_interval(config)
+    config["disable_monitor_retry"] = get_disable_monitor_retry(config)
     if config.get("current_account_id") is None and accounts:
         config["current_account_id"] = accounts[0].get("id")
     return config
@@ -178,6 +184,7 @@ def save_config(config):
         if key != "accounts" and key not in {"username", "password", "delay"}
     }
     safe_config["interval"] = get_interval(config)
+    safe_config["disable_monitor_retry"] = get_disable_monitor_retry(config)
     safe_config["accounts"] = [
         {"id": account["id"], "rollcall_settings": account["rollcall_settings"]}
         for account in accounts

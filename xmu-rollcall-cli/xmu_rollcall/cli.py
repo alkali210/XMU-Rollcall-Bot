@@ -9,7 +9,8 @@ from .config import (
     load_config, save_config, is_config_complete, get_cookies_path,
     add_account, get_all_accounts, get_current_account, set_current_account,
     get_account_by_id, CONFIG_FILE, delete_account, perform_account_deletion,
-    delete_saved_session, get_rollcall_settings, set_rollcall_settings, get_interval
+    delete_saved_session, get_rollcall_settings, set_rollcall_settings, get_interval,
+    get_disable_monitor_retry
 )
 from .logging_config import setup_logging
 from .monitor import start_monitor, base_url, headers
@@ -227,6 +228,12 @@ def config():
         save_config(current_config)
         tui.echo(f"Polling interval saved: {value:g}s (all accounts).")
 
+    def edit_monitor_retry():
+        current_config["disable_monitor_retry"] = not get_disable_monitor_retry(current_config)
+        save_config(current_config)
+        value = str(get_disable_monitor_retry(current_config)).lower()
+        tui.echo(f"Disable monitor retries: {value} (saved for all accounts; applies on next start).")
+
     try:
         while True:
             tui.console.print(tui.frame(tui.Group(tui.sections(
@@ -235,14 +242,15 @@ def config():
                 tui.panel(tui.menu_rows([
                     ("n", "Add new account"), ("d", "Delete account"),
                     ("s", "Edit rollcall settings"),
-                    ("i", f"Polling interval: {get_interval(current_config):g}s (all accounts)")]),
+                    ("i", f"Polling interval: {get_interval(current_config):g}s (all accounts)"),
+                    ("r", f"Disable monitor retries: {str(get_disable_monitor_retry(current_config)).lower()} (all accounts)")]),
                     "Actions", "blue")),
                 tui.Text(f"Configuration file: {CONFIG_FILE.resolve()}", style="dim")),
                 "Configuration", subtitle="Ctrl+C to return"))
 
             action = tui.prompt(
                 f"{Colors.BOLD}Action{Colors.ENDC}",
-                type=click.Choice(['n', 'd', 's', 'i'], case_sensitive=False),
+                type=click.Choice(['n', 'd', 's', 'i', 'r'], case_sensitive=False),
             )
 
             if action.lower() == 'n':
@@ -253,6 +261,8 @@ def config():
                 edit_account_settings()
             elif action.lower() == 'i':
                 edit_interval()
+            elif action.lower() == 'r':
+                edit_monitor_retry()
     except (click.Abort, KeyboardInterrupt):
         tui.echo("Configuration closed.")
         return
