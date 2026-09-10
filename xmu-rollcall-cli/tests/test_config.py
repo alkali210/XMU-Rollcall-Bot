@@ -89,6 +89,19 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertEqual(config.load_config()["interval"], 2.5)
 
+    def test_monitor_retry_default_and_menu_persistence(self):
+        self.assertIs(config.load_config()["disable_monitor_retry"], False)
+        for value in ("true", "false"):
+            with patch("xmu_rollcall.cli.setup_logging"):
+                result = CliRunner().invoke(cli, ["config"], input="r\n")
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIs(config.load_config()["disable_monitor_retry"], value == "true")
+            self.assertIs(json.loads(config.CONFIG_FILE.read_text())["disable_monitor_retry"], value == "true")
+
+    def test_invalid_monitor_retry_setting_defaults_to_false(self):
+        for value in (None, "true", "false", 1, [], {}):
+            self.assertIs(config.get_disable_monitor_retry({"disable_monitor_retry": value}), False)
+
     def test_wait_menu_saves_only_public_settings(self):
         self.seed()
         with patch("xmu_rollcall.cli.setup_logging"):

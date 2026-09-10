@@ -105,6 +105,10 @@ Press `i` in the configuration menu to set the polling interval (positive second
 }
 ```
 
+### Monitor error retries
+
+Press `r` in configuration to toggle and save `disable_monitor_retry` for all accounts (default: `false`). With `true`, monitoring exits on errors without backoff retries; `false` keeps up to 10 network retries. You can also set this boolean at the top level of `config.json`; it takes effect on the next monitor start. Startup never uses backoff retries.
+
 ### Waiting for classmates
 
 Press `s` (Edit rollcall settings) in configuration menu to set the number of classmates to wait for before submitting the rollcall.

@@ -10,7 +10,7 @@ from .logging_config import setup_logging
 from .network import REQUEST_TIMEOUT, RETRY_INITIAL_DELAY, RETRY_MAX_DELAY, RETRY_MAX_ATTEMPTS, is_retryable
 from .utils import save_session, load_session, verify_session
 from .rollcall_handler import process_rollcalls
-from .config import get_cookies_path, load_config, has_saved_session, get_interval, DEFAULT_INTERVAL
+from .config import get_cookies_path, load_config, has_saved_session, get_interval, DEFAULT_INTERVAL, get_disable_monitor_retry
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +52,9 @@ YELLOW_TEXT = f"{Colors.WARNING}"
 END = Colors.ENDC
 
 def _load_monitor_settings():
-    """Load monitor polling interval from config."""
+    """Load monitor polling interval and error handling from config."""
     config = load_config()
-    return get_interval(config)
+    return get_interval(config), get_disable_monitor_retry(config)
 
 def clear_screen():
     if tui.console.is_terminal:
@@ -120,7 +120,7 @@ def start_monitor(account):
     """启动监控程序"""
     log_file = setup_logging()
     global interval
-    interval = _load_monitor_settings()
+    interval, disable_monitor_retry = _load_monitor_settings()
     USERNAME = account['username']
     PASSWORD = account['password']
     ACCOUNT_ID = account.get('id', 1)
@@ -246,7 +246,7 @@ def start_monitor(account):
             except KeyboardInterrupt:
                 raise
             except Exception as e:
-                if is_retryable(e):
+                if not disable_monitor_retry and is_retryable(e):
                     live.stop()
                     if retries >= RETRY_MAX_ATTEMPTS:
                         _report_retry_limit(e)

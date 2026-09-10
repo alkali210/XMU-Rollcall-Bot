@@ -20,6 +20,21 @@ def response(data=None, status=200):
 
 
 class NetworkTests(unittest.TestCase):
+    def test_disabled_monitor_retries_exit_on_first_error(self):
+        for error in (requests.Timeout("Read timed out"),
+                      requests.exceptions.SSLError("UNEXPECTED_EOF_WHILE_READING"),
+                      response(status=503)):
+            with self.subTest(error=error):
+                code, sleeps, session, _, output = self.run_monitor([error], disable_retry=True)
+                self.assertEqual(code, 1)
+                self.assertEqual(session.get.call_count, 1)
+                self.assertFalse(any(s >= 5 for s in sleeps))
+                self.assertNotIn("Retry 1/10", output)
+
+    def test_monitor_loads_retry_setting(self):
+        with patch.object(monitor, "load_config", return_value={"disable_monitor_retry": True}):
+            self.assertEqual(monitor._load_monitor_settings(), (10, True))
+
     def test_retry_reports_original_error_in_red(self):
         error = requests.ConnectionError("Connection reset [details]\nOriginal server error")
         with patch.object(monitor.tui.console, "print") as output, patch.object(monitor.logger, "warning") as log:
@@ -41,7 +56,7 @@ class NetworkTests(unittest.TestCase):
         self.assertIn("retry limit reached (10 retries)", rendered.plain)
         log.assert_called_once_with(rendered.plain)
 
-    def run_monitor(self, outcomes, process=None, interrupt_delay=None):
+    def run_monitor(self, outcomes, process=None, interrupt_delay=None, disable_retry=False):
         session = Mock()
         session.get.side_effect = outcomes
         clock = [1000.0]
@@ -55,7 +70,7 @@ class NetworkTests(unittest.TestCase):
 
         with ExitStack() as stack:
             for name, value in {
-                "setup_logging": None, "_load_monitor_settings": 10,
+                "setup_logging": None, "_load_monitor_settings": (10, disable_retry),
                 "has_saved_session": True, "load_session": True,
                 "verify_session": {"name": "Test"}, "clear_screen": None,
             }.items():
@@ -103,7 +118,7 @@ class NetworkTests(unittest.TestCase):
         for cached in (True, False):
             with self.subTest(cached=cached), ExitStack() as stack:
                 for name, value in {
-                    "setup_logging": None, "_load_monitor_settings": 10,
+                    "setup_logging": None, "_load_monitor_settings": (10, False),
                     "has_saved_session": cached, "load_session": True,
                     "clear_screen": None,
                 }.items():
