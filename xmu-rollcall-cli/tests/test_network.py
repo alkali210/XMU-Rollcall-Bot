@@ -1,4 +1,6 @@
+import codecs
 import io
+import json
 import ssl
 import unittest
 from contextlib import ExitStack
@@ -19,7 +21,43 @@ def response(data=None, status=200):
     return result
 
 
+def json_response(data, encoding="utf-8", bom=True):
+    result = requests.Response()
+    result.status_code = 200
+    result.encoding = encoding
+    result._content = (codecs.BOM_UTF8 if bom else b"") + json.dumps(
+        data, ensure_ascii=False).encode("utf-8")
+    return result
+
+
 class NetworkTests(unittest.TestCase):
+    def test_json_response_with_and_without_utf8_bom(self):
+        data = {"name": "测试用户", "rollcalls": []}
+        for encoding in ("utf-8", "ISO-8859-1", None):
+            with self.subTest(encoding=encoding):
+                self.assertEqual(network.response_json(json_response(data, encoding)), data)
+        self.assertEqual(network.response_json(json_response(data, bom=False)), data)
+
+    def test_invalid_json_still_raises_requests_json_error(self):
+        for prefix in (b"", codecs.BOM_UTF8):
+            with self.subTest(prefix=prefix):
+                result = json_response({})
+                result._content = prefix + b"not JSON"
+                with self.assertRaises(requests.exceptions.JSONDecodeError):
+                    network.response_json(result)
+
+    def test_cached_session_profile_accepts_utf8_bom(self):
+        session = Mock()
+        session.get.return_value = json_response({"name": "测试用户"})
+        self.assertEqual(utils.verify_session(session), {"name": "测试用户"})
+
+    def test_monitor_poll_accepts_utf8_bom(self):
+        code, sleeps, session, _, _ = self.run_monitor([
+            json_response({"rollcalls": []}), KeyboardInterrupt()])
+        self.assertEqual(code, 0)
+        self.assertEqual(session.get.call_count, 2)
+        self.assertNotIn(5, sleeps)
+
     def test_disabled_monitor_retries_exit_on_first_error(self):
         for error in (requests.Timeout("Read timed out"),
                       requests.exceptions.SSLError("UNEXPECTED_EOF_WHILE_READING"),

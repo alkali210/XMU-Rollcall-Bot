@@ -12,6 +12,7 @@ from .config import (
     delete_saved_session, get_rollcall_settings, set_rollcall_settings, get_interval,
     get_disable_monitor_retry
 )
+from .network import response_json
 from .logging_config import setup_logging
 from .monitor import start_monitor, base_url, headers
 
@@ -99,7 +100,7 @@ def config():
 
             tui.echo(f"{Colors.OKCYAN}Fetching user profile...{Colors.ENDC}")
             try:
-                profile = session.get(f"{base_url}/api/profile", headers=headers).json()
+                profile = response_json(session.get(f"{base_url}/api/profile", headers=headers))
                 name = profile.get("name", "")
                 tui.echo(f"{Colors.OKGREEN}Welcome, {name}!{Colors.ENDC}")
             except Exception:

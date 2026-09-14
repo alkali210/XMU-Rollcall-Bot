@@ -2,7 +2,7 @@ import time
 import builtins
 import logging
 from . import tui
-from .network import is_retryable
+from .network import is_retryable, response_json
 from decimal import Decimal, ROUND_CEILING
 from .verify import send_code, send_radar, base_url
 from .config import get_rollcall_settings, normalize_rollcall_settings
@@ -65,7 +65,7 @@ def _fetch_attendance(session, rollcall_id):
         )
         resp.raise_for_status()
         if resp.status_code == 200:
-            students = _extract_student_rollcalls(resp.json())
+            students = _extract_student_rollcalls(response_json(resp))
             if not students or any(not isinstance(student, dict) for student in students):
                 return None
             return _count_signed_students(students), len(students)

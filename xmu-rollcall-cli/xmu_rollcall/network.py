@@ -1,4 +1,5 @@
-"""Network failure classification shared by monitoring and API calls."""
+"""Response parsing and network failure classification for API calls."""
+import codecs
 import ssl
 import requests
 
@@ -6,6 +7,13 @@ REQUEST_TIMEOUT = (10, 30)
 RETRY_INITIAL_DELAY = 5
 RETRY_MAX_DELAY = 60
 RETRY_MAX_ATTEMPTS = 10
+
+
+def response_json(response):
+    """Parse JSON, honoring a UTF-8 BOM even when HTTP specifies utf-8."""
+    if isinstance(response.content, bytes) and response.content.startswith(codecs.BOM_UTF8):
+        response.encoding = "utf-8-sig"
+    return response.json()
 
 
 def _is_ssl_eof(exc):
