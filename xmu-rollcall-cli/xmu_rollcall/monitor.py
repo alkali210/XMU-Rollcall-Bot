@@ -7,7 +7,7 @@ from xmulogin import xmulogin
 from . import tui
 from rich.live import Live
 from .logging_config import setup_logging
-from .network import REQUEST_TIMEOUT, RETRY_INITIAL_DELAY, RETRY_MAX_DELAY, RETRY_MAX_ATTEMPTS, is_retryable, response_json
+from .network import REQUEST_TIMEOUT, RETRY_INITIAL_DELAY, RETRY_MAX_DELAY, RETRY_MAX_ATTEMPTS, is_retryable
 from .utils import save_session, load_session, verify_session
 from .rollcall_handler import process_rollcalls
 from .config import get_cookies_path, load_config, has_saved_session, get_interval, DEFAULT_INTERVAL, get_disable_monitor_retry
@@ -171,6 +171,8 @@ def start_monitor(account):
             sys.exit(1)
 
     tui.echo(f"{Colors.OKCYAN}[Step 3/3]{Colors.ENDC} Fetching user profile...")
+    # profile = session.get(f"{base_url}/api/profile", headers=headers).json()
+    # name = profile["name"]
     tui.echo(f"Welcome, {ACCOUNT_NAME}")
 
     tui.echo(f"\n{Colors.OKGREEN}{Colors.BOLD}Initialization complete{Colors.ENDC}")
@@ -211,7 +213,7 @@ def start_monitor(account):
                     _last_query_time = elapsed
                     response = session.get(rollcalls_url, headers=headers, timeout=REQUEST_TIMEOUT)
                     response.raise_for_status()
-                    data = response_json(response)
+                    data = response.json()
                     query_count += 1
 
                     live.update(monitor_dashboard(ACCOUNT_NAME, start_time, query_count), refresh=True)

@@ -5,7 +5,7 @@ import builtins
 import logging
 import requests
 from . import tui
-from .network import REQUEST_TIMEOUT, is_retryable, response_json
+from .network import REQUEST_TIMEOUT, is_retryable
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ def get_number_rollcall_info(in_session, rollcall_id):
         return None, None, None, f"Failed to get number code. Status: {code_response.status_code}"
 
     try:
-        code_data = response_json(code_response)
+        code_data = code_response.json()
     except ValueError as e:
         return None, None, None, f"Failed to parse number code API response: {e}"
 
@@ -197,7 +197,7 @@ def send_radar(in_session, rollcall_id):
     res_1 = in_session.put(url, json=payload(lat_1, lon_1), headers=headers, timeout=REQUEST_TIMEOUT)
     if res_1.status_code in (408, 429, 500, 502, 503, 504):
         res_1.raise_for_status()
-    data_1 = response_json(res_1)
+    data_1 = res_1.json()
 
     if res_1.status_code == 200:
         return True
@@ -205,7 +205,7 @@ def send_radar(in_session, rollcall_id):
     res_2 = in_session.put(url, json=payload(lat_2, lon_2), headers=headers, timeout=REQUEST_TIMEOUT)
     if res_2.status_code in (408, 429, 500, 502, 503, 504):
         res_2.raise_for_status()
-    data_2 = response_json(res_2)
+    data_2 = res_2.json()
 
     if res_2.status_code == 200:
         return True
@@ -273,7 +273,7 @@ def send_radar(in_session, rollcall_id):
     if res_3.status_code == 200:
         return True
     else:
-        print(response_json(res_3))
+        print(res_3.json())
         res_4 = in_session.put(url, json=payload_2, headers=headers, timeout=REQUEST_TIMEOUT)
         if res_4.status_code in (408, 429, 500, 502, 503, 504):
             res_4.raise_for_status()

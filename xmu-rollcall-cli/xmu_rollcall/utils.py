@@ -3,7 +3,7 @@ import json
 import requests
 from . import secure_store
 from .config import get_cookies_path
-from .network import REQUEST_TIMEOUT, response_json
+from .network import REQUEST_TIMEOUT
 
 base_url = "https://lnt.xmu.edu.cn"
 headers = {
@@ -68,7 +68,7 @@ def verify_session(sess: requests.Session) -> dict:
         if resp.status_code not in (401, 403):
             resp.raise_for_status()
         if resp.status_code == 200:
-            data = response_json(resp)
+            data = resp.json()
             if isinstance(data, dict) and "name" in data:
                 return data
     except requests.RequestException:
