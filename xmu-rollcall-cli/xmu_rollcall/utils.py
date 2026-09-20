@@ -71,8 +71,10 @@ def verify_session(sess: requests.Session) -> dict:
             data = resp.json()
             if isinstance(data, dict) and "name" in data:
                 return data
+    except ValueError:
+        # Requests JSONDecodeError is also a RequestException: an invalid
+        # profile must allow credential login, not propagate as a network error.
+        pass
     except requests.RequestException:
         raise
-    except ValueError:
-        pass
     return {}
