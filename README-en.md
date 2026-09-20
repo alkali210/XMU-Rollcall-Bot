@@ -49,6 +49,19 @@ Subcommands also work from PowerShell:
 .\xmu-rollcall-3.4.2.0a0.exe start
 ```
 
+The EXE is built with Nuitka. Pushing a `v*` tag builds, smoke-tests, and attaches it to the GitHub Release. You can also run the `Build Windows EXE with Nuitka` workflow manually and download its artifact.
+
+To build locally, use Windows x64, Python 3.13, and Visual Studio 2022 Build Tools with the Desktop development with C++ workload. Run in PowerShell from `xmu-rollcall-cli/`:
+
+```powershell
+python -m pip install . "Nuitka>=2.7,<5" ordered-set zstandard
+$packageVersion = python -c "from importlib.metadata import version; print(version('xmu-rollcall-cli'))"
+python -m nuitka --mode=onefile --windows-console-mode=force --msvc=latest --assume-yes-for-downloads --output-filename="xmu-rollcall-$packageVersion.exe" --output-dir=dist --include-package=xmulogin --include-package-data=xmulogin packaging/windows_entry.py
+python packaging/smoke_exe.py "dist/xmu-rollcall-$packageVersion.exe"
+```
+
+The executable is written to `dist/`. The first build needs internet access to download build helpers. Smoke tests use a temporary configuration directory and require no credentials or login.
+
 ### Global installation (from source)
 
 ```bash
