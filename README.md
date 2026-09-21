@@ -67,6 +67,10 @@ uv run xmu-rollcall [option] # 如果使用 uv
 
 > 目前无法处理二维码签到，检测到二维码签到时，监控程序将暂停 5 分钟，以防止短时间内重复请求。
 
+### UserScript 版本
+
+只支持数字签到。见 [scripts/rollcall/README.md](scripts/rollcall/README.md)
+
 ## 配置
 
 可以直接在 TUI 中配置，在初次使用时需要新建账号并输入学号密码登录。
