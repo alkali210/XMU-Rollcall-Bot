@@ -56,7 +56,7 @@ To build locally, use Windows x64, Python 3.13, and Visual Studio 2022 Build Too
 ```powershell
 python -m pip install . "Nuitka>=2.7,<5" ordered-set zstandard
 $packageVersion = python -c "from importlib.metadata import version; print(version('xmu-rollcall-cli'))"
-python -m nuitka --mode=onefile --windows-console-mode=force --msvc=latest --assume-yes-for-downloads --output-filename="xmu-rollcall-$packageVersion.exe" --output-dir=dist --include-package=xmulogin --include-package-data=xmulogin packaging/windows_entry.py
+python -m nuitka --mode=onefile --windows-console-mode=force --msvc=latest --assume-yes-for-downloads --jobs=4 --output-filename="xmu-rollcall-$packageVersion.exe" --output-dir=dist --include-package=xmulogin --include-package-data=xmulogin packaging/windows_entry.py
 python packaging/smoke_exe.py "dist/xmu-rollcall-$packageVersion.exe"
 ```
 

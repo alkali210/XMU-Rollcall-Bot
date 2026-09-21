@@ -41,7 +41,7 @@ jobs:
           EXE_NAME: ${{ steps.package-version.outputs.exe-name }}
         run: >-
           python -m nuitka --mode=onefile --windows-console-mode=force
-          --msvc=latest --assume-yes-for-downloads
+          --msvc=latest --assume-yes-for-downloads --jobs=4
           --output-filename="$env:EXE_NAME.exe" --output-dir=dist
           --include-package=xmulogin --include-package-data=xmulogin
           packaging/windows_entry.py
