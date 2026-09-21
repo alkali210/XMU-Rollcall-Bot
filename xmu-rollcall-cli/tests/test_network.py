@@ -193,6 +193,48 @@ class NetworkTests(unittest.TestCase):
         session.get.return_value = response(status=401)
         self.assertEqual(utils.verify_session(session), {})
 
+    def test_cached_session_invalid_profile_allows_login(self):
+        for body in ('\ufeff{"name": "Test"}', '<html>Login required</html>', ''):
+            with self.subTest(body=body):
+                profile = requests.Response()
+                profile.status_code = 200
+                profile.encoding = "utf-8"
+                profile._content = body.encode("utf-8")
+                session = Mock()
+                session.get.return_value = profile
+                self.assertEqual(utils.verify_session(session), {})
+
+    def test_startup_bom_profile_falls_back_to_credentials(self):
+        profile = requests.Response()
+        profile.status_code = 200
+        profile.encoding = "utf-8"
+        profile._content = '\ufeff{"name": "Test"}'.encode("utf-8")
+        cached_session = Mock()
+        cached_session.get.return_value = profile
+        fresh_session = Mock()
+        fresh_session.get.side_effect = KeyboardInterrupt()
+
+        with ExitStack() as stack:
+            for name, value in {
+                "setup_logging": None, "_load_monitor_settings": (10, False),
+                "has_saved_session": True, "load_session": True,
+                "clear_screen": None,
+            }.items():
+                stack.enter_context(patch.object(monitor, name, return_value=value))
+            stack.enter_context(patch.object(monitor.requests, "Session", return_value=cached_session))
+            stack.enter_context(patch.object(monitor.time, "sleep"))
+            stack.enter_context(patch.object(monitor, "Live"))
+            stack.enter_context(patch.object(monitor.tui, "console", Console(file=io.StringIO())))
+            login = stack.enter_context(patch.object(monitor, "xmulogin", return_value=fresh_session))
+            save = stack.enter_context(patch.object(monitor, "save_session"))
+            with self.assertRaises(SystemExit) as stopped:
+                monitor.start_monitor({"id": 1, "username": "test", "password": "unused"})
+
+        self.assertEqual(stopped.exception.code, 0)
+        login.assert_called_once_with(type=3, username="test", password="unused")
+        save.assert_called_once_with(fresh_session, 1)
+        fresh_session.get.assert_called_once()
+
     def test_api_failures_reach_monitor_without_replaying_submission(self):
         for operation in (
             lambda s: verify.get_number_rollcall_info(s, 42),

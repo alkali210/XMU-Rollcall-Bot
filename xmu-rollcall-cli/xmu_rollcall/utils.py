@@ -71,8 +71,14 @@ def verify_session(sess: requests.Session) -> dict:
             data = resp.json()
             if isinstance(data, dict) and "name" in data:
                 return data
+    except ValueError:
+        # Requests JSONDecodeError is also a RequestException: an invalid
+        # profile must allow credential login, not propagate as a network error.
+        pass
+    except requests.exceptions.SSLError:
+        # SSL error may occur when start the monitor, even if the connection is stable.
+        # Let it be handled by the caller, and retry with password.
+        pass
     except requests.RequestException:
         raise
-    except ValueError:
-        pass
     return {}
