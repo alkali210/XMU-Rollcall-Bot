@@ -20,9 +20,17 @@
 
 ## 安装
 
-### Windows EXE
+### 单文件可执行程序
 
-从 [Releases](https://github.com/alkali210/XMU-Rollcall-Bot/releases) 下载 `xmu-rollcall-<version>.exe`。双击进入交互菜单，无需安装 Python。
+从 [Releases](https://github.com/alkali210/XMU-Rollcall-Bot/releases) 下载适合操作系统和 CPU 架构的文件：
+
+| 系统 | amd64 | arm64 |
+| --- | --- | --- |
+| Windows | `windows-amd64.exe` | `windows-arm64.exe` |
+| Linux | `linux-amd64` | `linux-arm64` |
+| macOS | `macos-amd64` | `macos-arm64` |
+
+无需安装 Python；Windows 可双击运行，Linux/macOS 下载后先执行 `chmod +x <filename>`，再运行。
 
 ### 从源码安装
 

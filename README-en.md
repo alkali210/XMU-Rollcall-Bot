@@ -38,29 +38,21 @@ Based on version 3.4.1 of [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt
 
 ## Installation
 
-### Windows single-file EXE
+### Single-file executables
 
-Download the versioned EXE (for example, `xmu-rollcall-3.4.2.0a0.exe`) from **Releases**, alongside the Python wheel and source distribution, and double-click it to open the menu. Python is not required.
-Subcommands also work from PowerShell:
+Download the matching `xmu-rollcall-<version>-<platform>-<arch>` from **Releases** (Windows files end in `.exe`). The six combinations are `windows-amd64`, `windows-arm64`, `linux-amd64`, `linux-arm64`, `macos-amd64`, and `macos-arm64`. No Python installation is needed. On Windows double-click the EXE or run it from PowerShell; on Linux/macOS, run `chmod +x <downloaded-file>` before launching it in a terminal. Linux compatibility depends on the target system's glibc version.
 
-```powershell
-.\xmu-rollcall-3.4.2.0a0.exe
-.\xmu-rollcall-3.4.2.0a0.exe config
-.\xmu-rollcall-3.4.2.0a0.exe start
-```
+Nuitka builds and smoke-tests each target on its native GitHub Actions runner. Pushing a `v*` tag attaches all six binaries plus the Python distributions to the GitHub Release. Alternatively, run the `Build binaries with Nuitka` workflow manually to download the artifacts.
 
-The EXE is built with Nuitka. Pushing a `v*` tag builds, smoke-tests, and attaches it to the GitHub Release. You can also run the `Build Windows EXE with Nuitka` workflow manually and download its artifact.
+To build locally on the target OS/architecture, use Python 3.13 and a C compiler (Visual Studio 2022 C++ Build Tools on Windows, Xcode command-line tools on macOS, GCC and patchelf on Linux). From `xmu-rollcall-cli/`:
 
-To build locally, use Windows x64, Python 3.13, and Visual Studio 2022 Build Tools with the Desktop development with C++ workload. Run in PowerShell from `xmu-rollcall-cli/`:
-
-```powershell
+```bash
 python -m pip install . "Nuitka>=2.7,<5" ordered-set zstandard
-$packageVersion = python -c "from importlib.metadata import version; print(version('xmu-rollcall-cli'))"
-python -m nuitka --mode=onefile --windows-console-mode=force --msvc=latest --assume-yes-for-downloads --jobs=4 --output-filename="xmu-rollcall-$packageVersion.exe" --output-dir=dist --include-package=xmulogin --include-package-data=xmulogin packaging/windows_entry.py
-python packaging/smoke_exe.py "dist/xmu-rollcall-$packageVersion.exe"
+python -m nuitka --mode=onefile --assume-yes-for-downloads --jobs=4 --output-filename=xmu-rollcall-local --output-dir=dist --include-package=xmulogin --include-package-data=xmulogin packaging/entry.py
+python packaging/smoke_exe.py dist/xmu-rollcall-local
 ```
 
-The executable is written to `dist/`. The first build needs internet access to download build helpers. Smoke tests use a temporary configuration directory and require no credentials or login.
+On Windows, add `--windows-console-mode=force --msvc=latest` and use `--output-filename=xmu-rollcall-local.exe` and `dist/xmu-rollcall-local.exe` for the smoke check. The workflow sets platform-specific versioned output filenames. The first build needs internet access to download build helpers. Smoke tests use a temporary configuration directory and require no credentials or login.
 
 ### Global installation (from source)
 
@@ -103,7 +95,7 @@ Logs are stored as `xmu_rollcall.log` in the configuration directory.
 
 ### Interval for monitoring
 
-The configuration directory is selected from `XMU_ROLLCALL_CONFIG_DIR`, then `~/.xmu_rollcall`, falling back to `.xmu_rollcall` in the current directory when the home directory is not writable. On Windows the default is `%USERPROFILE%\.xmu_rollcall`. The EXE and Python versions use the same rules. This directory contains `config.json`, `secure_store.sqlite3`, `secret.key`, and logs; runtime data is not bundled into the EXE.
+The configuration directory is selected from `XMU_ROLLCALL_CONFIG_DIR`, then `~/.xmu_rollcall`, falling back to `.xmu_rollcall` in the current directory when the home directory is not writable. On Windows the default is `%USERPROFILE%\.xmu_rollcall`. The packaged executables and Python installation use the same rules. This directory contains `config.json`, `secure_store.sqlite3`, `secret.key`, and logs; runtime data is not bundled into the executables.
 
 Press `i` in the configuration menu to set the polling interval (positive seconds, default: 10s) for all accounts. You can also edit `config.json`; changes apply on the next monitoring run:
 
