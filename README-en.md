@@ -97,7 +97,7 @@ Logs are stored as `xmu_rollcall.log` in the configuration directory.
 
 The configuration directory is selected from `XMU_ROLLCALL_CONFIG_DIR`, then `~/.xmu_rollcall`, falling back to `.xmu_rollcall` in the current directory when the home directory is not writable. On Windows the default is `%USERPROFILE%\.xmu_rollcall`. The packaged executables and Python installation use the same rules. This directory contains `config.json`, `secure_store.sqlite3`, `secret.key`, and logs; runtime data is not bundled into the executables.
 
-Press `i` in the configuration menu to set the polling interval (positive seconds, default: 10s) for all accounts. You can also edit `config.json`; changes apply on the next monitoring run:
+Press `i` in the configuration menu to set the polling interval (positive seconds, default: 60s) for all accounts. You can also edit `config.json`; changes apply on the next monitoring run:
 
 ```jsonc
 {

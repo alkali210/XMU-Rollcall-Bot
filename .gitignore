@@ -9,3 +9,4 @@ secret.key
 *.log
 *bootstrap*
 node_modules/
+timetable_rollcalls.json

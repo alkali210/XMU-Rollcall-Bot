@@ -1,10 +1,8 @@
 # XMU Rollcall Bot
 
-> [!warning]
-> ## 2026-10-10 数字点名失效
-> ~~由于服务端更新（1.80），`/api/rollcall/<rollcall_id>/student_rollcalls` 的 `number_code` 字段不再返回数字签到码而是 `null`~~
-> 
-> 找到可用接口，等待测试新签到逻辑
+> [!note]
+> ## 2026-10-10 数字签到取码接口已更新
+> `/api/rollcall/<rollcall_id>/student_rollcalls` -> `/api/timetable_rollcalls?course_ids=<course_id>&rollcall_date=<yyyy-mm-dd>`
 
 [English](README-en.md) | **简体中文**
 
@@ -115,7 +113,7 @@ uv run xmu-rollcall [option] # 如果使用 uv
 
 ### 监控间隔
 
-在配置菜单中按 `i` 设置监控间隔，对所有账号生效（默认：10 秒，支持正数秒值）。
+在配置菜单中按 `i` 设置监控间隔，对所有账号生效（默认：60 秒，支持正数秒值）。
 
 ### 监控错误重试
 

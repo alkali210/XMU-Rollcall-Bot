@@ -3,6 +3,7 @@ import time
 import math
 import builtins
 import logging
+from datetime import datetime, timedelta, timezone
 import requests
 from . import tui
 from .network import REQUEST_TIMEOUT, is_retryable
@@ -40,78 +41,48 @@ def _api_headers(in_session=None):
         "Referer": f"{base_url}/",
     }
 
-def find_key(data, key, depth=0, max_depth=10):
-    """Extract the first value for key from nested dict/list API responses.
-
-    Args:
-        data: Parsed JSON payload from Tronclass APIs.
-        key: Field name to find.
-        depth: Current recursive depth when traversing nested structures.
-        max_depth: Maximum depth allowed for traversal to avoid pathological recursion.
-
-    Returns:
-        object or None: The first discovered value, or None if not found.
-    """
-    if depth > max_depth:
-        return None
-    if isinstance(data, dict):
-        value = data.get(key)
-        if value is not None:
-            return value
-        for value in data.values():
-            nested_value = find_key(value, key, depth + 1, max_depth)
-            if nested_value is not None:
-                return nested_value
-    elif isinstance(data, list):
-        for item in data:
-            nested_value = find_key(item, key, depth + 1, max_depth)
-            if nested_value is not None:
-                return nested_value
-    return None
-
-def find_number_code(data, depth=0, max_depth=10):
-    """Extract number_code from nested dict/list API responses."""
-    number_code = find_key(data, "number_code", depth, max_depth)
-    if number_code is None:
-        return None
-    return str(number_code)
-
 def get_number_rollcall_info(in_session, rollcall_id):
-    """Fetch number rollcall details directly from Tronclass API.
-
-    This mirrors the working approach in ``xmu_rollcall_zako_Tronclass``:
-    ``GET /api/rollcall/{rollcall_id}/student_rollcalls`` exposes the
-    ``number_code`` used by numeric rollcalls.  The response shape has changed
-    across Tronclass versions, so values are searched recursively.
-
-    Returns:
-        tuple: (number_code, status, end_time, error_message)
-    """
-    code_url = f"{base_url}/api/rollcall/{rollcall_id}/student_rollcalls"
+    """Return (code, status, end_time, error) for this rollcall via the timetable API."""
     request_headers = _api_headers(in_session)
     try:
-        code_response = in_session.get(code_url, headers=request_headers, timeout=REQUEST_TIMEOUT)
+        detail_response = in_session.get(
+            f"{base_url}/api/rollcall/{rollcall_id}",
+            headers=request_headers, timeout=REQUEST_TIMEOUT,
+        )
+        detail_response.raise_for_status()
+        detail = detail_response.json()
+        if not isinstance(detail, dict) or not detail.get("course_id") or not detail.get("rollcall_time"):
+            return None, None, None, "Failed to get rollcall course or time from API response."
+        rollcall_date = datetime.fromisoformat(detail["rollcall_time"]).astimezone(
+            timezone(timedelta(hours=8))
+        ).date().isoformat()
+        code_response = in_session.get(
+            f"{base_url}/api/timetable_rollcalls",
+            params={"course_ids": detail["course_id"], "rollcall_date": rollcall_date},
+            headers=request_headers, timeout=REQUEST_TIMEOUT,
+        )
+        code_response.raise_for_status()
+        code_data = code_response.json()
+    except ValueError as e:
+        return None, None, None, f"Failed to parse number code API response: {e}"
     except requests.RequestException as e:
         if is_retryable(e):
             raise
         return None, None, None, f"Failed to request number code API: {e}"
 
-    if code_response.status_code in (408, 429, 500, 502, 503, 504):
-        code_response.raise_for_status()
-    if code_response.status_code != 200:
-        return None, None, None, f"Failed to get number code. Status: {code_response.status_code}"
+    rollcalls = code_data.get("rollcalls") if isinstance(code_data, dict) else None
+    if not isinstance(rollcalls, list):
+        return None, None, None, "Failed to get rollcalls from timetable API response."
+    for rollcall in rollcalls:
+        if not isinstance(rollcall, dict) or str(rollcall.get("id")) != str(rollcall_id):
+            continue
+        number_code = rollcall.get("number_code")
+        status, end_time = rollcall.get("status"), rollcall.get("end_time")
+        if number_code is None or str(number_code).strip() == "":
+            return None, status, end_time, "Failed to get number code. 'number_code' not found in API response."
+        return str(number_code), status, end_time, None
+    return None, None, None, f"Rollcall {rollcall_id} not found in timetable API response."
 
-    try:
-        code_data = code_response.json()
-    except ValueError as e:
-        return None, None, None, f"Failed to parse number code API response: {e}"
-
-    number_code = find_number_code(code_data)
-    status = find_key(code_data, "status")
-    end_time = find_key(code_data, "end_time")
-    if not number_code:
-        return None, status, end_time, "Failed to get number code. 'number_code' not found in API response."
-    return number_code, status, end_time, None
 
 def submit_number_code(in_session, rollcall_id, number_code, status=None, end_time=None, started_at=None):
     print = log_and_print
