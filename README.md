@@ -2,7 +2,7 @@
 
 > [!note]
 > ## 2026-10-10 数字签到取码接口已更新
-> 服务端 1.80 更新后，`student_rollcalls` 不再返回签到码。现改用当前账号的登录会话请求 `GET /api/timetable_rollcalls?course_ids=<course_id>&rollcall_date=<yyyy-mm-dd>`。
+> `/api/rollcall/<rollcall_id>/student_rollcalls` -> `/api/timetable_rollcalls?course_ids=<course_id>&rollcall_date=<yyyy-mm-dd>`
 
 [English](README-en.md) | **简体中文**
 
