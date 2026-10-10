@@ -1,5 +1,9 @@
 # XMU Rollcall Bot
 
+> [!caution]
+> ## 2026-10-10 数字点名失效
+> 由于服务端更新（1.80），`/api/rollcall/<rollcall_id>/student_rollcalls` 的 `number_code` 字段不再返回数字签到码而是 `null`
+
 [English](README-en.md) | **简体中文**
 
 > 本项目 fork 自 [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot)，并基于其 3.4.1 版本进行开发。
