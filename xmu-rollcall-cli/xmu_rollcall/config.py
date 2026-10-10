@@ -42,11 +42,11 @@ secure_store.configure(CONFIG_DIR)
 DEFAULT_CONFIG = {
     "accounts": [],
     "current_account_id": None,
-    "interval": 10,
+    "interval": 60,
     "disable_monitor_retry": False,
 }
 
-DEFAULT_INTERVAL = 10
+DEFAULT_INTERVAL = 60
 
 
 def get_disable_monitor_retry(config):

@@ -113,7 +113,7 @@ class ConfigTests(unittest.TestCase):
 
     def test_invalid_intervals_use_default(self):
         for value in (None, True, 0, -1, "bad", "nan", "inf"):
-            self.assertEqual(config.get_interval({"interval": value}), 10)
+            self.assertEqual(config.get_interval({"interval": value}), 60)
 
     def test_percentage_menu_round_trip(self):
         self.seed()
