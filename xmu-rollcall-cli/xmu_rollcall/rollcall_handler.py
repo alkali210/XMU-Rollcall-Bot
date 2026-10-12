@@ -180,6 +180,7 @@ def handle_rollcalls(data, session, account=None):
             print(f"Course name: {rollcalls[i]['course_title']}, rollcall created by {rollcalls[i]['department_name']} {rollcalls[i]['created_by_name']}.")
 
             if rollcalls[i]['is_radar']:
+                logger.info("Radar rollcall detected: rollcall_id=%s", rollcalls[i]['rollcall_id'])
                 temp_str = "Radar rollcall"
             elif rollcalls[i]['is_number']:
                 temp_str = "Number rollcall"
