@@ -1,5 +1,11 @@
 # XMU Rollcall Bot
 
+> [!warning]
+> ## 2026-10-12 雷达签到失效
+> ```text
+> TypeError: unsupported operand type(s) for +: 'NoneType' and 'NoneType'
+> ```
+
 > [!note]
 > ## 2026-10-10 数字签到取码接口已更新
 > `/api/rollcall/<rollcall_id>/student_rollcalls` -> `/api/timetable_rollcalls?course_ids=<course_id>&rollcall_date=<yyyy-mm-dd>`
