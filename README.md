@@ -5,6 +5,7 @@
 > ```text
 > TypeError: unsupported operand type(s) for +: 'NoneType' and 'NoneType'
 > ```
+> 猜测也由于接口变化导致，作为替代，如果已知可能的经纬度，可以尝试手动或者使用 Agent [直接提交雷达签到](#直接提交雷达签到)。
 
 > [!note]
 > ## 2026-10-10 数字签到取码接口已更新
@@ -130,3 +131,97 @@ uv run xmu-rollcall [option] # 如果使用 uv
 ### 等待同学签到
 
 在配置菜单中按 `s`，设置提交签到前的等待，正整数表示提交前等待的已签到人数，百分比表示提交前等待的人数比例，`false` 表示不等待，默认值为 `10%`。
+
+## 直接提交雷达签到
+
+### 请求形式
+
+- `PUT` `https://lnt.xmu.edu.cn/api/rollcall/{rollcall_id}/answer`
+- 认证：所选账号已登录会话的 Cookie
+- 当前实现见 [`verify.py`](xmu-rollcall-cli/xmu_rollcall/verify.py) 中的 `send_radar()`
+
+### 示例
+
+`submit_radar.py`
+
+```python
+import argparse
+import json
+import math
+import sys
+import uuid
+from pathlib import Path
+
+import requests
+
+sys.path.insert(0, str(Path.cwd() / "xmu-rollcall-cli"))
+from xmu_rollcall.network import REQUEST_TIMEOUT
+from xmu_rollcall.utils import load_session
+from xmu_rollcall.verify import base_url, headers
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Submit one known radar location")
+    parser.add_argument("--account-id", type=int, required=True)
+    parser.add_argument("--rollcall-id", type=int, required=True)
+    parser.add_argument("--latitude", type=float, required=True)
+    parser.add_argument("--longitude", type=float, required=True)
+    args = parser.parse_args()
+    if args.account_id <= 0 or args.rollcall_id <= 0:
+        parser.error("Account ID and rollcall ID must be positive")
+    if (not math.isfinite(args.latitude) or not -90 <= args.latitude <= 90
+            or not math.isfinite(args.longitude) or not -180 <= args.longitude <= 180):
+        parser.error("Latitude must be in [-90, 90]; longitude in [-180, 180]")
+
+    payload = {
+        "accuracy": 35,
+        "altitude": 0,
+        "altitudeAccuracy": None,
+        "deviceId": str(uuid.uuid4()),
+        "heading": None,
+        "latitude": args.latitude,
+        "longitude": args.longitude,
+        "speed": None,
+    }
+    with requests.Session() as session:
+        if not load_session(session, args.account_id):
+            print("No saved session for this account; log in with xmu-rollcall start first.",
+                  file=sys.stderr)
+            return 1
+        try:
+            response = session.put(
+                f"{base_url}/api/rollcall/{args.rollcall_id}/answer",
+                json=payload, headers=headers, timeout=REQUEST_TIMEOUT,
+                allow_redirects=False,
+            )
+        except requests.RequestException as exc:
+            print(f"Request failed; submission outcome unknown: {exc}", file=sys.stderr)
+            return 1
+
+    try:
+        body = response.json()
+    except ValueError:
+        body = response.text
+    print(json.dumps({
+        "account_id": args.account_id,
+        "rollcall_id": args.rollcall_id,
+        "latitude": args.latitude,
+        "longitude": args.longitude,
+        "status_code": response.status_code,
+        "content_type": response.headers.get("Content-Type"),
+        "response": body,
+    }, ensure_ascii=False))
+    return 0 if response.status_code == 200 else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+```
+
+从仓库根目录运行它：
+
+```bash
+python submit_radar.py --account-id 3 --rollcall-id 123456 --latitude 24.1234 --longitude 118.5678
+```
+
+要在 `xmu-rollcall` 中已有保存的登录会话，示例会复用程序的保存会话加载函数。`rollcall_id` 可以在日志中找到。
