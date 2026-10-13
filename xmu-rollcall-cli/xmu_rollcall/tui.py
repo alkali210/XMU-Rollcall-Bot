@@ -225,6 +225,7 @@ def home(account, account_count):
         ("3 / start", "Start monitoring rollcalls"),
         ("4 / refresh", "Clear saved login session"),
         ("5 / check", "Check for updates"),
+        ("6 / update", "Upgrade this program (alias: upgrade)"),
     ])
     console.print(frame(sections(panel(identity, "", "blue"),
                                  panel(commands, "Commands")),

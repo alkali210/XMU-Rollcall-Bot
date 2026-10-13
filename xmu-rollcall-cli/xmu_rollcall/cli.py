@@ -1,7 +1,9 @@
 import click
 import logging
 import math
+import subprocess
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 import sys
 import json
 import uuid
@@ -25,14 +27,24 @@ from .tui import Colors
 
 logger = logging.getLogger(__name__)
 
+# Fixed install source. update/upgrade never reads or writes account files.
+INSTALL_URL = (
+    "git+https://github.com/alkali210/XMU-Rollcall-Bot.git"
+    "#subdirectory=xmu-rollcall-cli"
+)
+_UPDATE_COMMANDS = frozenset({"update", "upgrade"})
 
 @click.group(invoke_without_command=True)
 @click.pass_context
 def cli(ctx):
-    log_file = setup_logging()
-    ctx.ensure_object(dict)
-    ctx.obj["log_file"] = log_file
     command_name = ctx.invoked_subcommand or "interactive"
+    ctx.ensure_object(dict)
+    # update/upgrade must not open the account directory or its log file.
+    if command_name in _UPDATE_COMMANDS:
+        logger.info("CLI invoked: %s", command_name)
+        return
+    log_file = setup_logging()
+    ctx.obj["log_file"] = log_file
     logger.info("CLI invoked: %s", command_name)
     if ctx.invoked_subcommand is None:
         interactive_menu(ctx)
@@ -41,13 +53,17 @@ def cli(ctx):
 def interactive_menu(ctx):
     if tui.console.is_terminal:
         tui.console.clear()
-    aliases = {"1": "config", "2": "switch", "3": "start", "4": "refresh", "5": "check"}
+    aliases = {
+        "1": "config", "2": "switch", "3": "start", "4": "refresh",
+        "5": "check", "6": "update", "upgrade": "update",
+    }
     while True:
         data = load_config()
         tui.home(get_current_account(data), len(get_all_accounts(data)))
         try:
             action = tui.prompt("Command", type=click.Choice(
-                ["1", "2", "3", "4", "5", "config", "switch", "start", "refresh", "check"],
+                ["1", "2", "3", "4", "5", "6", "config", "switch", "start",
+                 "refresh", "check", "update", "upgrade"],
                 case_sensitive=False)).lower()
             command = cli.commands[aliases.get(action, action)]
             try:
@@ -445,6 +461,194 @@ def switch():
     else:
         tui.echo(f"{Colors.FAIL}✗ Account not found!{Colors.ENDC}")
         sys.exit(1)
+
+
+def _path_parts(path):
+    text = str(path).replace("\\", "/")
+    return [part.casefold() for part in text.split("/") if part not in ("", ".")]
+
+
+def _has_uv_tools_segment(path):
+    parts = _path_parts(path)
+    return any(left == "uv" and right == "tools" for left, right in zip(parts, parts[1:]))
+
+
+def _venv_root(path):
+    """Return a nearby virtualenv root, identified by pyvenv.cfg."""
+    current = path if path.is_dir() else path.parent
+    for _ in range(8):
+        try:
+            if (current / "pyvenv.cfg").is_file():
+                return current
+        except OSError:
+            return None
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return None
+
+
+def _is_uv_tool_path(path):
+    """True when path looks like a uv tool env. A uv binary on PATH does not count."""
+    if _has_uv_tools_segment(path):
+        return True
+    root = _venv_root(path)
+    if root is None:
+        return False
+    try:
+        return (root / "uv-receipt.toml").is_file()
+    except OSError:
+        return False
+
+
+def _is_pip_path(path):
+    parts = _path_parts(path)
+    if "site-packages" in parts or "dist-packages" in parts:
+        return True
+    return _venv_root(path) is not None
+
+
+def detect_install_method(package=None, executable=None, prefix=None, frozen=None):
+    """Guess 'uv', 'pip', or None from this process.
+
+    uv on PATH is ignored. A uv tool install counts only when this package and
+    the running environment agree: the path contains a uv/tools segment, or the
+    virtualenv contains uv-receipt.toml. The interpreter is not resolved,
+    because uv's tool Python is often a symlink to a base interpreter outside
+    the tool environment. Otherwise a package in site-packages, dist-packages,
+    or another virtualenv is a pip guess. Mixed signals, a frozen executable,
+    and a source checkout are unknown.
+    """
+    if frozen is None:
+        frozen = bool(getattr(sys, "frozen", False))
+    if frozen:
+        return None
+
+    package_path = Path(package if package is not None else __file__)
+    executable_path = Path(executable if executable is not None else sys.executable)
+    prefix_path = Path(prefix if prefix is not None else sys.prefix)
+    package_is_uv = _is_uv_tool_path(package_path)
+    runtime_is_uv = _is_uv_tool_path(executable_path) or _is_uv_tool_path(prefix_path)
+    if package_is_uv and runtime_is_uv:
+        return "uv"
+    if package_is_uv or runtime_is_uv:
+        return None
+    if _is_pip_path(package_path):
+        return "pip"
+    return None
+
+
+def install_argv(method):
+    if method == "uv":
+        return ["uv", "tool", "install", "--upgrade", "--force", INSTALL_URL]
+    if method == "pip":
+        return ["pip", "install", "--upgrade", INSTALL_URL]
+    raise ValueError(method)
+
+
+def _stdin_is_interactive():
+    try:
+        return sys.stdin.isatty()
+    except Exception:
+        return False
+
+
+_UNKNOWN_INSTALL = (
+    "Could not tell how this copy was installed. Pass --uv or --pip to choose one."
+)
+_NONINTERACTIVE_INSTALL = (
+    "Refusing to install without a prompt. "
+    "Pass --uv or --pip together with --yes to run non-interactively."
+)
+
+
+def _run_install(argv):
+    try:
+        completed = subprocess.run(argv)
+    except FileNotFoundError:
+        tui.echo(f"{Colors.FAIL}Could not run {argv[0]}. Install {argv[0]} and try again.{Colors.ENDC}")
+        sys.exit(1)
+    sys.exit(completed.returncode)
+
+
+def run_update(use_uv, use_pip, assume_yes):
+    """Show the guessed or chosen install command and run it only after confirmation."""
+    if use_uv and use_pip:
+        tui.echo("Pass only one of --uv or --pip.")
+        sys.exit(2)
+
+    explicit = "uv" if use_uv else "pip" if use_pip else None
+    guessed = explicit is None
+    method = explicit if explicit is not None else detect_install_method()
+    if method is None:
+        tui.echo(_UNKNOWN_INSTALL)
+        if not _stdin_is_interactive():
+            tui.echo(_NONINTERACTIVE_INSTALL)
+            sys.exit(1)
+        method = tui.prompt(
+            "Install method",
+            type=click.Choice(["uv", "pip"], case_sensitive=False),
+        ).lower()
+        guessed = False
+
+    argv = install_argv(method)
+    if explicit is not None:
+        tui.echo(f"Install method: {method} (--{method}).")
+    elif guessed:
+        tui.echo(f"Guessed install method: {method}.")
+        tui.echo("This guess comes from where the program is running, not from whether uv is on PATH.")
+    else:
+        tui.echo(f"Install method: {method}.")
+    tui.echo("Command: " + " ".join(argv))
+
+    if explicit is not None and assume_yes:
+        _run_install(argv)
+        return
+    if not _stdin_is_interactive():
+        tui.echo(_NONINTERACTIVE_INSTALL)
+        sys.exit(1)
+
+    answer = tui.prompt(
+        "Run this command?",
+        type=click.Choice(["y", "n"], case_sensitive=False),
+        default="n",
+        show_default=True,
+    )
+    if answer.lower() != "y":
+        tui.echo("Update cancelled.")
+        sys.exit(1)
+    _run_install(argv)
+
+
+def _update_options(func):
+    func = click.option(
+        "--yes", "-y", is_flag=True,
+        help="Install without prompting. Requires --uv or --pip.",
+    )(func)
+    func = click.option(
+        "--pip", "use_pip", is_flag=True,
+        help="Use pip install --upgrade for this repository.",
+    )(func)
+    func = click.option(
+        "--uv", "use_uv", is_flag=True,
+        help="Use uv tool install --upgrade --force for this repository.",
+    )(func)
+    return func
+
+
+@cli.command(name="update")
+@_update_options
+def update(use_uv, use_pip, yes):
+    """从本 GitHub 仓库升级程序，不修改已保存的账号"""
+    run_update(use_uv, use_pip, yes)
+
+
+@cli.command(name="upgrade")
+@_update_options
+def upgrade(use_uv, use_pip, yes):
+    """update 的别名，从本 GitHub 仓库升级程序"""
+    run_update(use_uv, use_pip, yes)
 
 
 if __name__ == '__main__':
