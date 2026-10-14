@@ -1,22 +1,5 @@
 # XMU Rollcall Bot
 
-Network recovery is built into the monitor; no watchdog script is required.
-Connection failures, timeouts, truncated transfers, and HTTP 408/429/500/502/503/504
-retry after 5, 10, 20, 40, then 60 seconds, continuing at 60 seconds for at most
-10 retries after the initial request. If all retries fail, an error is displayed
-and the program exits. Ctrl+C exits during the wait. A successful cycle resets
-the delay and retry count. SSL unexpected EOF errors
-(`UNEXPECTED_EOF_WHILE_READING`) also trigger backoff retries. Failures and recovery are logged.
-Interrupted rollcall processing re-fetches server state before another submission.
-Monitor and number/radar requests use 10-second connect and 30-second read timeouts;
-attendance waiting retains its 10-second timeout. Exceptions from cached-session
-validation and startup login fail immediately without backoff retries; the external login
-library still controls its own internal timeouts and error return behavior.
-Authentication, certificate, malformed-response, and programming errors are not
-retried indefinitely. An outage can still cause an expired rollcall to be missed.
-An external supervisor can cover process crashes in unattended deployments, but
-adds deployment and shutdown complexity and cannot recover application state.
-
 **English** | [简体中文](README.md)
 
 > This project is forked from [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot).
@@ -72,7 +55,7 @@ uv sync
 
 ## Usage
 
-Run `xmu-rollcall` without arguments to open the Rich interactive menu. Enter `1`–`4` or `config` / `switch` / `start` / `refresh`, and press `Ctrl-C` to exit. Configuration, account switching, and session refresh return to the menu after completion. After selecting `start`, pressing `Ctrl-C` exits the application directly. Existing subcommands still work directly. Panels adapt to the terminal width.
+Run `xmu-rollcall` without arguments to open the Rich interactive menu. Enter `1`–`5` or `config` / `switch` / `start` / `refresh` / `check`, and press `Ctrl-C` to exit. Configuration, account switching, session refresh, and update checks return to the menu after completion. After selecting `start`, pressing `Ctrl-C` exits the application directly. Existing subcommands still work directly. Panels adapt to the terminal width.
 
 ```bash
 xmu-rollcall         # open the interactive menu
@@ -80,6 +63,7 @@ xmu-rollcall config  # configure your account. support multiple accounts
 xmu-rollcall switch  # switch between accounts
 xmu-rollcall start   # start the monitor
 xmu-rollcall refresh # refresh login status
+xmu-rollcall check   # check for updates
 
 uv run xmu-rollcall           # open the interactive menu with uv
 uv run xmu-rollcall <command> # run a subcommand with uv

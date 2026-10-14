@@ -10,6 +10,8 @@
 > ## 2026-10-10 数字签到取码接口已更新
 > `/api/rollcall/<rollcall_id>/student_rollcalls` -> `/api/timetable_rollcalls?course_ids=<course_id>&rollcall_date=<yyyy-mm-dd>`
 
+---
+
 [English](README-en.md) | **简体中文**
 
 > 本项目 fork 自 [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot)，并基于其 3.4.1 版本进行开发。
@@ -74,6 +76,7 @@ xmu-rollcall config  # 配置账号，支持多账号
 xmu-rollcall switch  # 切换账号
 xmu-rollcall start   # 启动监控
 xmu-rollcall refresh # 刷新登录状态
+xmu-rollcall check   # 检查更新
 xmu-rollcall --help  # 查看帮助
 
 uv run xmu-rollcall [option] # 如果使用 uv

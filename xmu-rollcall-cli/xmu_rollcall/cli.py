@@ -14,6 +14,8 @@ from .config import (
 )
 from .logging_config import setup_logging
 from .monitor import start_monitor, base_url, headers
+from . import __version__
+from .updates import check_updates
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +46,13 @@ def cli(ctx):
 def interactive_menu(ctx):
     if tui.console.is_terminal:
         tui.console.clear()
-    aliases = {"1": "config", "2": "switch", "3": "start", "4": "refresh"}
+    aliases = {"1": "config", "2": "switch", "3": "start", "4": "refresh", "5": "check"}
     while True:
         data = load_config()
         tui.home(get_current_account(data), len(get_all_accounts(data)))
         try:
             action = tui.prompt("Command", type=click.Choice(
-                ["1", "2", "3", "4", "config", "switch", "start", "refresh"],
+                ["1", "2", "3", "4", "5", "config", "switch", "start", "refresh", "check"],
                 case_sensitive=False)).lower()
             command = cli.commands[aliases.get(action, action)]
             try:
@@ -71,6 +73,24 @@ def interactive_menu(ctx):
         except (click.Abort, KeyboardInterrupt):
             tui.echo("Goodbye!")
             return
+
+@cli.command()
+def check():
+    """检查更新"""
+    tui.echo(f"{Colors.BOLD}Checking for updates...{Colors.ENDC}")
+    try:
+        info = check_updates(__version__)
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
+    tui.echo(f"Current version: {__version__} ({info.current_commit})")
+    tui.echo(f"{info.commits_since_release} commits to main since this release")
+    if info.update_available:
+        tui.echo(f"{Colors.OKGREEN}Update available!{Colors.ENDC}")
+        tui.echo(f"New version: {info.latest_version} ({info.latest_commit})")
+        tui.echo(f"Release: {info.release_url}")
+    else:
+        tui.echo("Up to date.")
+
 
 @cli.command()
 def config():

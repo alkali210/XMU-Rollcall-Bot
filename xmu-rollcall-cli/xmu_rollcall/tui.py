@@ -200,6 +200,7 @@ def home(account, account_count):
         ("2 / switch", "Switch the current account"),
         ("3 / start", "Start monitoring rollcalls"),
         ("4 / refresh", "Clear saved login session"),
+        ("5 / check", "Check for updates"),
     ])
     console.print(frame(sections(panel(identity, "", "blue"),
                                  panel(commands, "Commands")),
