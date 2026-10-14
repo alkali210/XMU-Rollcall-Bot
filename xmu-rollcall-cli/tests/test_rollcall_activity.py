@@ -90,7 +90,7 @@ class RollcallActivityTests(unittest.TestCase):
 
     def test_layout_and_literal_names_at_multiple_widths(self):
         for width in (40, 60, 80, 100, 120):
-            for state in ("detected", "waiting", "submitting", "success", "failed", "already", "unsupported"):
+            for state in ("detected", "waiting", "timeout", "submitting", "success", "failed", "already", "unsupported"):
                 with self.subTest(width=width, state=state):
                     output = io.StringIO()
                     console = Console(file=output, width=width, color_system=None)

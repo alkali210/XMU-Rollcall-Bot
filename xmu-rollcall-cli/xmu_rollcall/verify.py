@@ -102,7 +102,7 @@ def send_code(in_session, rollcall_id, before_submit=None):
             status,
             end_time,
         )
-    if before_submit is not None and not before_submit(number_code, status, end_time):
+    if before_submit is not None and not before_submit(number_code):
         return False
 
     return submit_number_code(

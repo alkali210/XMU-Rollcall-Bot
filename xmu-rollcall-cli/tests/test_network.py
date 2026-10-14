@@ -174,6 +174,27 @@ class NetworkTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(session.get.call_count, 1)
 
+    def test_wait_timeout_requeries_same_rollcall_and_fetches_a_fresh_code(self):
+        from test_rollcall_activity import rollcall
+
+        data = {"rollcalls": [rollcall()]}
+        with patch.object(rollcall_handler.time, "monotonic", side_effect=lambda: monitor.time.time()), patch.object(
+            verify, "get_number_rollcall_info",
+            side_effect=[("1234", "ongoing", None, None), ("5678", "ongoing", None, None)],
+        ) as code_fetch, patch.object(
+            rollcall_handler, "_fetch_attendance", side_effect=[(0, 20)] * 60 + [(20, 20)]
+        ), patch.object(verify, "submit_number_code", return_value=True) as submit:
+            code, _, session, handler, _ = self.run_monitor(
+                [response(data), response(data), KeyboardInterrupt()],
+                process=rollcall_handler.process_rollcalls,
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(session.get.call_count, 3)
+        self.assertEqual(handler.call_count, 2)
+        self.assertEqual(code_fetch.call_count, 2)
+        submit.assert_called_once()
+        self.assertEqual(submit.call_args.args[2], "5678")
+
     def test_permanent_errors_are_not_retried(self):
         for error in (ValueError("bad JSON"), requests.exceptions.SSLError(),
                       response(status=401), response(status=403)):

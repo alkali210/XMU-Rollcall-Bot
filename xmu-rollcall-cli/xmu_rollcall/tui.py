@@ -85,6 +85,7 @@ class RollcallView:
         title, color, detail = {
             "detected": ("New rollcall found", "cyan", "Reading rollcall details"),
             "waiting": ("Waiting for classmates", "yellow", "Submit when the target is reached"),
+            "timeout": ("Wait round ended", "yellow", "Returning to monitor to check the current rollcall status"),
             "submitting": ("Submitting answer", "cyan", "Waiting for confirmation"),
             "success": ("Rollcall answered", "green", "Answer confirmed"),
             "failed": ("Answering failed", "red", "No confirmation received · see log for details"),
@@ -119,7 +120,7 @@ class RollcallView:
         steps = Text()
         labels = ["Detected", "Waiting", "Submitting", "Confirmed"]
         active = {"detected": 0, "waiting": 1, "submitting": 2}.get(state, 3)
-        if state in {"already", "unsupported", "interrupted"}:
+        if state in {"already", "unsupported", "interrupted", "timeout"}:
             labels, active = ["Detected", title], 1
         elif state == "failed":
             labels[-1] = "Failed"

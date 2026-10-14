@@ -32,6 +32,12 @@
 
 ## 安装
 
+### Pip
+
+```bash
+pip install "git+https://github.com/alkali210/XMU-Rollcall-Bot.git#subdirectory=xmu-rollcall-cli"
+```
+
 ### 单文件可执行程序
 
 从 [Releases](https://github.com/alkali210/XMU-Rollcall-Bot/releases) 下载适合操作系统和 CPU 架构的文件：
@@ -51,20 +57,7 @@ clone 本仓库并进入 `xmu-rollcall-cli/`：
 ```bash
 git clone --depth 1 https://github.com/alkali210/XMU-Rollcall-Bot.git
 cd XMU-Rollcall-Bot/xmu-rollcall-cli
-```
-
-#### 虚拟环境
-
-```bash
 uv sync
-```
-
-#### 全局安装
-
-```bash
-uv tool install -e . # Recommended
-# or
-pip install -e .
 ```
 
 ## 使用
@@ -79,7 +72,7 @@ xmu-rollcall switch  # 切换账号
 xmu-rollcall start   # 启动监控
 xmu-rollcall refresh # 刷新登录状态
 xmu-rollcall check   # 检查更新
-xmu-rollcall radar <command> # 提交已知雷达签到坐标
+xmu-rollcall radar [options] [coordinates] # 提交已知雷达签到坐标
 xmu-rollcall --help  # 查看帮助
 ```
 
@@ -147,5 +140,4 @@ xmu-rollcall radar --latitude <lat> --longitude <lon> [--account-id <id>] [--rol
 
 在配置菜单中按 `s`，设置提交签到前的等待，正整数表示提交前等待的已签到人数，百分比表示提交前等待的人数比例，`false` 表示不等待，默认值为 `10%`。
 
-接口提供 `end_time` 时，等待以该时间为截止时间：查询签到人数前后都会检查是否过期，到期后停止等待。缺失或无效时，按普通流程等待人数达标，不设截止时间。
-
+每轮最多等待 5 分钟，每 5 秒查询一次已签到人数。超时返回监控重新查询签到状态。如果签到仍然活动，会重新获取数字码并开始下一轮等待。

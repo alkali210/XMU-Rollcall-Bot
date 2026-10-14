@@ -20,6 +20,12 @@ Based on version 3.4.1 of [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt
 
 ## Installation
 
+### Pip
+
+```bash
+pip install "git+https://github.com/alkali210/XMU-Rollcall-Bot.git#subdirectory=xmu-rollcall-cli"
+```
+
 ### Single-file executables
 
 Download the matching `xmu-rollcall-<version>-<platform>-<arch>` from **Releases** (Windows files end in `.exe`). The six combinations are `windows-amd64`, `windows-arm64`, `linux-amd64`, `linux-arm64`, `macos-amd64`, and `macos-arm64`. No Python installation is needed. On Windows double-click the EXE or run it from PowerShell; on Linux/macOS, run `chmod +x <downloaded-file>` before launching it in a terminal. Linux compatibility depends on the target system's glibc version.
@@ -36,22 +42,11 @@ python packaging/smoke_exe.py dist/xmu-rollcall-local
 
 On Windows, add `--windows-console-mode=force --msvc=latest` and use `--output-filename=xmu-rollcall-local.exe` and `dist/xmu-rollcall-local.exe` for the smoke check. The workflow sets platform-specific versioned output filenames. The first build needs internet access to download build helpers. Smoke tests use a temporary configuration directory and require no credentials or login.
 
-### Global installation (from source)
+### From source
 
 ```bash
 git clone --depth 1 -b main https://github.com/alkali210/XMU-Rollcall-Bot.git
-cd XMU-Rollcall-Bot
-
-uv tool install -e xmu-rollcall-cli # Recommended
-# or
-pip install -e xmu-rollcall-cli
-```
-
-### Virtual environment (using uv)
-
-Run the following command from the `xmu-rollcall-cli` directory:
-
-```bash
+cd XMU-Rollcall-Bot/xmu-rollcall-cli
 uv sync
 ```
 
@@ -66,7 +61,7 @@ xmu-rollcall switch  # switch between accounts
 xmu-rollcall start   # start the monitor
 xmu-rollcall refresh # refresh login status
 xmu-rollcall check   # check for updates
-xmu-rollcall radar <command> # submit a known radar location
+xmu-rollcall radar [options] [coordinates] # submit a known radar location
 ```
 
 ### Submit Known Radar Coordinates
@@ -115,6 +110,6 @@ These settings live in the `accounts` list in `config.json`, matched to the acco
 
 For percentage waiting, enter `20%` in the `s` menu or set `"wait_before_answer": "20%"` in JSON. Percentages must be greater than 0% and at most 100%; decimals are supported. The denominator is the number of students returned by the API, and the required count rounds up (20% of 6 requires 2). Only `rollcall_status == "on_call_fine"` counts as signed. Missing, empty, or malformed lists keep waiting. New accounts and missing settings default to `10%`; existing explicit settings are preserved.
 
-When the API provides a valid `end_time`, waiting is bounded by that deadline. If it is missing or invalid, waiting continues until the attendance target is reached, without a deadline.
+Each wait round lasts up to five minutes, checking attendance every five seconds. Reaching the target triggers submission; a timeout skips submission and returns to monitoring to query the current rollcall status. If the rollcall is still active, the number code is fetched again and a new wait round starts.
 
 Credentials and sessions remain in encrypted SQLite storage. Existing database settings migrate automatically on first run; JSON settings take precedence, and legacy database settings are cleared only after a successful JSON write. Exit the configuration menu before editing the file manually.
