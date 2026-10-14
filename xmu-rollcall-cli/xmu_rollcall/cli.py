@@ -11,9 +11,9 @@ from .utils import load_session
 from . import tui
 from xmulogin import xmulogin
 from .config import (
-    load_config, save_config, is_config_complete, get_cookies_path,
+    load_config, save_config, is_config_complete,
     add_account, get_all_accounts, get_current_account, set_current_account,
-    get_account_by_id, CONFIG_FILE, delete_account, perform_account_deletion,
+    get_account_by_id, CONFIG_FILE, delete_account,
     delete_saved_session, get_rollcall_settings, set_rollcall_settings, get_interval,
     get_disable_monitor_retry
 )
@@ -169,13 +169,11 @@ def config():
             tui.echo(f"{Colors.GRAY}Deletion cancelled.{Colors.ENDC}\n")
             return
 
-        success, cookies_to_delete, cookies_to_rename = delete_account(current_config, selected_id)
+        success = delete_account(current_config, selected_id)
         if success:
             save_config(current_config)
-            perform_account_deletion(cookies_to_delete, cookies_to_rename)
             tui.echo(f"{Colors.OKGREEN}Account deleted successfully!{Colors.ENDC}")
-            if cookies_to_rename:
-                tui.echo(f"{Colors.GRAY}Note: Account IDs have been re-assigned.{Colors.ENDC}")
+            tui.echo(f"{Colors.GRAY}Note: Account IDs have been re-assigned.{Colors.ENDC}")
             tui.echo()
         else:
             tui.echo(f"{Colors.FAIL}Failed to delete account.{Colors.ENDC}\n")
@@ -416,17 +414,10 @@ def refresh():
         sys.exit(1)
 
     account_id = current_account.get("id")
-    cookies_path = get_cookies_path(account_id)
     try:
         tui.echo(f"\n{Colors.WARNING}Deleting saved session for account {account_id} ({current_account.get('name')})...{Colors.ENDC}")
         delete_saved_session(account_id)
-        # delete legacy cookies file if present
-        import os
-        if os.path.exists(cookies_path):
-            os.remove(cookies_path)
-            tui.echo(f"{Colors.OKGREEN}Saved session deleted successfully. Legacy cookies file removed too.{Colors.ENDC}")
-        else:
-            tui.echo(f"{Colors.OKGREEN}Saved session deleted successfully.{Colors.ENDC}")
+        tui.echo(f"{Colors.OKGREEN}Saved session deleted successfully.{Colors.ENDC}")
         sys.exit(0)
     except Exception as e:
         tui.echo(f"{Colors.FAIL}Failed to delete saved session: {str(e)}{Colors.ENDC}")

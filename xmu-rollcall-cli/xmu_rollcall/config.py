@@ -154,17 +154,6 @@ def load_config():
             raise RuntimeError(f"Cannot read configuration {CONFIG_FILE}: {exc}") from exc
         if not isinstance(config, dict) or not isinstance(config.get("accounts", []), list):
             raise RuntimeError(f"Invalid configuration format: {CONFIG_FILE}")
-        # Migrate legacy plaintext credentials without discarding public settings.
-        if "accounts" not in config and config.get("username") and config.get("password"):
-            config["accounts"] = [{"id": 1, "name": "",
-                                   "username": config["username"],
-                                   "password": config["password"]}]
-            config["current_account_id"] = 1
-        legacy_accounts = config.get("accounts", [])
-        if any(isinstance(acc, dict) and (acc.get("username") or acc.get("password"))
-               for acc in legacy_accounts):
-            save_config(config)
-            return config
     merged = _with_stored_accounts(config, stored_accounts)
     if (any(account.get("rollcall_settings") for account in stored_accounts)
             or "accounts" not in config or "interval" not in config):
@@ -260,13 +249,6 @@ def is_config_complete(config):
     required_fields = ["username", "password"]
     return all(current_account.get(field) for field in required_fields)
 
-def get_cookies_path(account_id=None):
-    """获取旧版cookies文件路径，仅用于兼容迁移"""
-    ensure_config_dir()
-    if account_id is None:
-        config = load_config()
-        account_id = config.get("current_account_id", 1)
-    return str(CONFIG_DIR / f"{account_id}.json")
 
 def has_saved_session(account_id):
     """检查SQLite中是否有加密session"""
@@ -277,11 +259,7 @@ def delete_saved_session(account_id):
     secure_store.delete_session(account_id)
 
 def delete_account(config, account_id):
-    """
-    删除账号并重新编号
-    返回: (成功删除, 被删除账号的旧cookies路径列表, 需要重命名的cookies映射)
-    """
-    import os
+    """删除账号并重新编号，返回是否成功删除。"""
 
     accounts = config.get("accounts", [])
 
@@ -295,13 +273,8 @@ def delete_account(config, account_id):
             break
 
     if account_to_delete is None:
-        return False, [], {}
+        return False
 
-    # 记录需要删除的cookies文件
-    cookies_to_delete = get_cookies_path(account_id)
-
-    # 记录需要重命名的cookies文件 (旧ID -> 新ID)
-    cookies_to_rename = {}
 
     # 删除账号
     accounts.pop(delete_index)
@@ -311,10 +284,6 @@ def delete_account(config, account_id):
         old_id = acc.get("id")
         if old_id > account_id:
             new_id = old_id - 1
-            old_cookies = get_cookies_path(old_id)
-            new_cookies = get_cookies_path(new_id)
-            if os.path.exists(old_cookies):
-                cookies_to_rename[old_cookies] = new_cookies
             acc["id"] = new_id
 
     # 更新当前账号ID
@@ -331,23 +300,6 @@ def delete_account(config, account_id):
 
     config["accounts"] = accounts
 
-    return True, cookies_to_delete, cookies_to_rename
+    return True
 
-def perform_account_deletion(cookies_to_delete, cookies_to_rename):
-    """执行cookies文件的删除和重命名操作"""
-    import os
-
-    # 删除被删除账号的cookies
-    if os.path.exists(cookies_to_delete):
-        os.remove(cookies_to_delete)
-
-    # 重命名其他账号的cookies文件（按顺序处理，避免覆盖）
-    # 先按旧ID从小到大排序
-    sorted_renames = sorted(cookies_to_rename.items(), key=lambda x: x[0])
-    for old_path, new_path in sorted_renames:
-        if os.path.exists(old_path):
-            # 如果目标文件已存在，先删除
-            if os.path.exists(new_path):
-                os.remove(new_path)
-            os.rename(old_path, new_path)
 

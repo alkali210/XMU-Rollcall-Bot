@@ -10,3 +10,4 @@ secret.key
 *bootstrap*
 node_modules/
 timetable_rollcalls.json
+.playwright-cli/

@@ -123,7 +123,6 @@ class NetworkTests(unittest.TestCase):
                     "clear_screen": None,
                 }.items():
                     stack.enter_context(patch.object(monitor, name, return_value=value))
-                stack.enter_context(patch.object(monitor.os.path, "exists", return_value=False))
                 stack.enter_context(patch.object(monitor.tui, "console", Console(file=io.StringIO())))
                 sleep = stack.enter_context(patch.object(monitor.time, "sleep"))
                 retry = stack.enter_context(patch.object(monitor, "_report_retry"))

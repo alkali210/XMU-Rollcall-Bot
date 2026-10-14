@@ -1,5 +1,4 @@
 import time
-import os
 import sys
 import requests
 import logging
@@ -10,7 +9,7 @@ from .logging_config import setup_logging
 from .network import REQUEST_TIMEOUT, RETRY_INITIAL_DELAY, RETRY_MAX_DELAY, RETRY_MAX_ATTEMPTS, is_retryable
 from .utils import save_session, load_session, verify_session
 from .rollcall_handler import process_rollcalls
-from .config import get_cookies_path, load_config, has_saved_session, get_interval, DEFAULT_INTERVAL, get_disable_monitor_retry
+from .config import load_config, has_saved_session, get_interval, DEFAULT_INTERVAL, get_disable_monitor_retry
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +130,6 @@ def start_monitor(account):
     # 设置全局位置信息
     # set_location(LATITUDE, LONGITUDE)
 
-    legacy_cookies_path = get_cookies_path(ACCOUNT_ID)
     rollcalls_url = f"{base_url}/api/radar/rollcalls"
     session = None
     logger.info("Starting monitor for account id=%s name=%s", ACCOUNT_ID, ACCOUNT_NAME or USERNAME)
@@ -145,7 +143,7 @@ def start_monitor(account):
 
     tui.echo(f"\n{Colors.OKCYAN}[Step 1/3]{Colors.ENDC} Checking credentials...")
 
-    if has_saved_session(ACCOUNT_ID) or os.path.exists(legacy_cookies_path):
+    if has_saved_session(ACCOUNT_ID):
         tui.echo(f"{Colors.OKCYAN}[Step 2/3]{Colors.ENDC} Found cached session, attempting to restore...")
         session_candidate = requests.Session()
         if load_session(session_candidate, ACCOUNT_ID):
