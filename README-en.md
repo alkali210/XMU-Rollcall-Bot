@@ -115,4 +115,6 @@ These settings live in the `accounts` list in `config.json`, matched to the acco
 
 For percentage waiting, enter `20%` in the `s` menu or set `"wait_before_answer": "20%"` in JSON. Percentages must be greater than 0% and at most 100%; decimals are supported. The denominator is the number of students returned by the API, and the required count rounds up (20% of 6 requires 2). Only `rollcall_status == "on_call_fine"` counts as signed. Missing, empty, or malformed lists keep waiting. New accounts and missing settings default to `10%`; existing explicit settings are preserved.
 
+When the API provides a valid `end_time`, waiting is bounded by that deadline. If it is missing or invalid, waiting continues until the attendance target is reached, without a deadline.
+
 Credentials and sessions remain in encrypted SQLite storage. Existing database settings migrate automatically on first run; JSON settings take precedence, and legacy database settings are cleared only after a successful JSON write. Exit the configuration menu before editing the file manually.

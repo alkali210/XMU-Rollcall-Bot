@@ -3,11 +3,12 @@ import logging
 from . import tui
 from .network import is_retryable
 from decimal import Decimal, ROUND_CEILING
+from datetime import datetime
 from .verify import send_code, base_url
 from .config import get_rollcall_settings, normalize_rollcall_settings
 
 logger = logging.getLogger(__name__)
-WAIT_POLL_INTERVAL = 3
+WAIT_POLL_INTERVAL = 5
 SIGNED_ROLLCALL_STATUS = "on_call_fine"
 
 
@@ -86,16 +87,30 @@ def _wait_status_line(count_text, target, number_code=None):
     code_text = f" | Number code: {number_code}" if number_code else ""
     return f"\r  Signed: {count_text}/{target}{code_text}"
 
-def wait_for_classmates(session, rollcall_id, settings, number_code=None):
-    """Wait until enough classmates have signed before answering."""
+def wait_for_classmates(session, rollcall_id, settings, number_code=None, *, end_time):
+    """Return whether submission may proceed; stop waiting at the API deadline."""
     print = tui.log_and_print
+    try:
+        deadline = datetime.fromisoformat(end_time).timestamp() if end_time else None
+    except (TypeError, ValueError, OverflowError, OSError):
+        deadline = None
+        logger.warning("Invalid end_time for rollcall_id=%s: %r; waiting without a deadline", rollcall_id, end_time)
+
+    def expired():
+        if deadline is not None and time.time() >= deadline:
+            print(f"\nRollcall {rollcall_id} expired at {end_time}; stop waiting without submitting.")
+            return True
+        return False
+
+    if expired():
+        return False
     settings = normalize_rollcall_settings(settings)
     wait_value = settings["wait_before_answer"]
     percentage = (Decimal(wait_value[:-1])
                   if isinstance(wait_value, str) and wait_value.endswith("%") else None)
     target = _choose_wait_target(settings)
     if percentage is None and target <= 0:
-        return
+        return True
 
     target_label = f"{percentage}% of students" if percentage is not None else f"{target} classmate(s)"
     tui.update_rollcall(state="waiting", target_label=target_label, number_code=number_code)
@@ -103,7 +118,11 @@ def wait_for_classmates(session, rollcall_id, settings, number_code=None):
     if number_code:
         print(f"Number code: {number_code}")
     while True:
+        if expired():
+            return False
         attendance = _fetch_attendance(session, rollcall_id)
+        if expired():
+            return False
         count = attendance[0] if attendance is not None else None
         if count is not None:
             if percentage is not None:
@@ -117,13 +136,16 @@ def wait_for_classmates(session, rollcall_id, settings, number_code=None):
             print(_wait_status_line(count, display_target, number_code), end="", flush=True)
             if count >= target:
                 print()
-                return
+                return True
         else:
             tui.update_rollcall(signed=None, total=None)
             code_text = f" | Number code: {number_code}" if number_code else ""
             print(f"\r  Signed: unknown | Target: {target_label}, retrying...{code_text}", end="", flush=True)
 
-        time.sleep(WAIT_POLL_INTERVAL)
+        sleep_seconds = WAIT_POLL_INTERVAL
+        if deadline is not None:
+            sleep_seconds = min(sleep_seconds, max(0, deadline - time.time()))
+        time.sleep(sleep_seconds)
 
 def process_rollcalls(data, session, account=None):
     """处理签到数据"""
@@ -183,8 +205,12 @@ def handle_rollcalls(data, session, account=None):
             if (rollcalls[i]['status'] == 'absent') & (rollcalls[i]['is_number']) & (not rollcalls[i]['is_radar']):
                 def before_submit(_number_code, _status, _end_time, rollcall_id=rollcalls[i]['rollcall_id']):
                     tui.update_rollcall(number_code=_number_code)
-                    wait_for_classmates(session, rollcall_id, settings, number_code=_number_code)
+                    if not wait_for_classmates(
+                        session, rollcall_id, settings, number_code=_number_code, end_time=_end_time
+                    ):
+                        return False
                     tui.update_rollcall(state="submitting")
+                    return True
 
                 if send_code(session, rollcalls[i]['rollcall_id'], before_submit=before_submit):
                     answer_status[i] = True

@@ -40,7 +40,7 @@ class RollcallActivityTests(unittest.TestCase):
             with patch.object(view, "update", side_effect=capture), patch.object(
                 handler, "get_rollcall_settings", return_value={"wait_before_answer": "30%"}
             ), patch.object(handler, "_fetch_attendance", side_effect=[None, (7, 60), (18, 60)]), patch.object(
-                verify, "get_number_rollcall_info", return_value=("0026", None, None, None)
+                verify, "get_number_rollcall_info", return_value=("0026", "ongoing", "2099-01-01T00:00:00Z", None)
             ), patch.object(handler.time, "sleep"), patch("builtins.print") as plain:
                 result = handler.process_rollcalls({"rollcalls": [rollcall()]}, session)
                 plain.assert_not_called()
