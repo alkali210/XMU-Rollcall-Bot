@@ -85,7 +85,7 @@ class RollcallActivityTests(unittest.TestCase):
                 self.assertEqual(view.data["state"], state)
                 self.assertFalse(tui.rollcall_output_active())
         with patch("builtins.print") as plain:
-            handler.log_and_print("Restored")
+            tui.log_and_print("Restored")
             plain.assert_called_once_with("Restored")
 
     def test_layout_and_literal_names_at_multiple_widths(self):

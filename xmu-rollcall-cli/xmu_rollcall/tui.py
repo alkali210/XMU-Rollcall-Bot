@@ -2,6 +2,8 @@
 
 import click
 import time
+import builtins
+import logging
 from colorsys import hsv_to_rgb
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -17,6 +19,27 @@ from . import __version__
 
 console = Console(highlight=False)
 _rollcall_view = ContextVar("rollcall_view", default=None)
+logger = logging.getLogger(__name__)
+
+
+class Colors:
+    BOLD = '\033[1m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    GRAY = '\033[90m'
+
+
+def log_and_print(*args, **kwargs):
+    if not rollcall_output_active():
+        builtins.print(*args, **kwargs)
+    sep = kwargs.get("sep", " ")
+    message = sep.join(str(arg) for arg in args).strip()
+    if message:
+        logger.info(message)
+
 
 
 def rollcall_output_active():
@@ -161,7 +184,7 @@ def menu_rows(rows, key_style="bold cyan"):
 
 
 def echo(message=""):
-    # Keep legacy message colors, but never interpret account names as markup.
+    # Preserve ANSI colors without interpreting account names as markup.
     console.print(Text.from_ansi(str(message)))
 
 

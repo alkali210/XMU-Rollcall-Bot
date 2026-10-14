@@ -1,5 +1,4 @@
 import time
-import builtins
 import logging
 from . import tui
 from .network import is_retryable
@@ -11,13 +10,6 @@ logger = logging.getLogger(__name__)
 WAIT_POLL_INTERVAL = 3
 SIGNED_ROLLCALL_STATUS = "on_call_fine"
 
-def log_and_print(*args, **kwargs):
-    if not tui.rollcall_output_active():
-        builtins.print(*args, **kwargs)
-    sep = kwargs.get("sep", " ")
-    message = sep.join(str(arg) for arg in args).strip()
-    if message:
-        logger.info(message)
 
 def _extract_student_rollcalls(payload):
     if isinstance(payload, dict):
@@ -96,7 +88,7 @@ def _wait_status_line(count_text, target, number_code=None):
 
 def wait_for_classmates(session, rollcall_id, settings, number_code=None):
     """Wait until enough classmates have signed before answering."""
-    print = log_and_print
+    print = tui.log_and_print
     settings = normalize_rollcall_settings(settings)
     wait_value = settings["wait_before_answer"]
     percentage = (Decimal(wait_value[:-1])
@@ -167,7 +159,7 @@ def extract_rollcalls(data):
 
 def handle_rollcalls(data, session, account=None):
     """处理签到流程"""
-    print = log_and_print
+    print = tui.log_and_print
     count, rollcalls = extract_rollcalls(data)
     answer_status = [False for _ in range(count)]
     settings = get_rollcall_settings(account or {})

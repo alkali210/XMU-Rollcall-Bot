@@ -24,7 +24,7 @@ class WaitingTests(unittest.TestCase):
                                              ("94%", False, 56), ("100%", False, 59)]:
             with self.subTest(percentage=percentage), patch.object(
                 handler.time, "sleep", side_effect=InterruptedError("still waiting")
-            ) as sleep, patch.object(handler, "log_and_print") as output:
+            ) as sleep, patch.object(handler.tui, "log_and_print") as output:
                 if reached:
                     handler.wait_for_classmates(session, 42, {"wait_before_answer": percentage})
                     sleep.assert_not_called()
@@ -36,7 +36,7 @@ class WaitingTests(unittest.TestCase):
     def test_percentage_rounds_up_and_keeps_waiting(self):
         with patch.object(handler, "_fetch_attendance", side_effect=[(1, 6), (2, 6)]) as fetch, patch.object(
             handler.time, "sleep"
-        ) as sleep, patch.object(handler, "log_and_print"):
+        ) as sleep, patch.object(handler.tui, "log_and_print"):
             handler.wait_for_classmates(Mock(), 42, {"wait_before_answer": "20%"})
         self.assertEqual(fetch.call_count, 2)
         sleep.assert_called_once_with(handler.WAIT_POLL_INTERVAL)
@@ -44,20 +44,20 @@ class WaitingTests(unittest.TestCase):
     def test_exact_percentage_boundary(self):
         with patch.object(handler, "_fetch_attendance", return_value=(7, 100)), patch.object(
             handler.time, "sleep", side_effect=AssertionError("Should submit at exactly 7%")
-        ), patch.object(handler, "log_and_print"):
+        ), patch.object(handler.tui, "log_and_print"):
             handler.wait_for_classmates(Mock(), 42, {"wait_before_answer": "7%"})
 
     def test_unavailable_attendance_waits(self):
         with patch.object(handler, "_fetch_attendance", side_effect=[None, (5, 10)]), patch.object(
             handler.time, "sleep"
-        ) as sleep, patch.object(handler, "log_and_print"):
+        ) as sleep, patch.object(handler.tui, "log_and_print"):
             handler.wait_for_classmates(Mock(), 42, {"wait_before_answer": "50%"})
         sleep.assert_called_once()
 
     def test_count_and_disabled_modes(self):
         with patch.object(handler, "_fetch_attendance", side_effect=[(2, 100), (3, 100)]) as fetch, patch.object(
             handler.time, "sleep"
-        ), patch.object(handler, "log_and_print"):
+        ), patch.object(handler.tui, "log_and_print"):
             handler.wait_for_classmates(Mock(), 42, {"wait_before_answer": False})
             fetch.assert_not_called()
             handler.wait_for_classmates(Mock(), 42, {"wait_before_answer": 3})

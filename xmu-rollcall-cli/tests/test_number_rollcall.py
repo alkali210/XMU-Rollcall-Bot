@@ -45,7 +45,7 @@ class NumberRollcallTests(unittest.TestCase):
                      [{"id": 446055, "number_code": None},
                       {"id": 446056, "number_code": "9999"}],
                      [{"id": 446055, "number_code": ""}], []):
-            with self.subTest(rows=rows), patch.object(verify, "log_and_print"):
+            with self.subTest(rows=rows), patch.object(verify.tui, "log_and_print"):
                 session = self.session(rows)
                 self.assertFalse(verify.send_code(session, 446055))
                 session.put.assert_not_called()
@@ -63,7 +63,7 @@ class NumberRollcallTests(unittest.TestCase):
 
     def test_unauthorized_or_malformed_response_does_not_submit(self):
         for result in (response({}, 401), response({"rollcalls": None})):
-            with self.subTest(status=result.status_code), patch.object(verify, "log_and_print"):
+            with self.subTest(status=result.status_code), patch.object(verify.tui, "log_and_print"):
                 session = self.session([])
                 session.get.side_effect = [
                     response({"course_id": 113897, "rollcall_time": "2026-10-10T01:57:40Z"}),

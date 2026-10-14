@@ -10,6 +10,7 @@ from .network import REQUEST_TIMEOUT, RETRY_INITIAL_DELAY, RETRY_MAX_DELAY, RETR
 from .utils import save_session, load_session, verify_session
 from .rollcall_handler import process_rollcalls
 from .config import load_config, has_saved_session, get_interval, DEFAULT_INTERVAL, get_disable_monitor_retry
+from .tui import Colors
 
 logger = logging.getLogger(__name__)
 
@@ -26,29 +27,6 @@ headers = {
     "Referer": "https://ids.xmu.edu.cn/authserver/login",
 }
 
-# ANSI Color codes
-class Colors:
-    __slots__ = ()
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-    GRAY = '\033[90m'
-    WHITE = '\033[97m'
-    BG_BLUE = '\033[44m'
-    BG_GREEN = '\033[42m'
-    BG_CYAN = '\033[46m'
-
-BOLD_LABEL = f"{Colors.BOLD}"
-CYAN_TEXT = f"{Colors.OKCYAN}"
-GREEN_TEXT = f"{Colors.OKGREEN}"
-YELLOW_TEXT = f"{Colors.WARNING}"
-END = Colors.ENDC
 
 def _load_monitor_settings():
     """Load monitor polling interval and error handling from config."""
@@ -124,18 +102,12 @@ def start_monitor(account):
     PASSWORD = account['password']
     ACCOUNT_ID = account.get('id', 1)
     ACCOUNT_NAME = account.get('name', '')
-    # LATITUDE = account.get('latitude', 0)
-    # LONGITUDE = account.get('longitude', 0)
-
-    # 设置全局位置信息
-    # set_location(LATITUDE, LONGITUDE)
 
     rollcalls_url = f"{base_url}/api/radar/rollcalls"
     session = None
     logger.info("Starting monitor for account id=%s name=%s", ACCOUNT_ID, ACCOUNT_NAME or USERNAME)
     logger.info("Log file: %s", log_file)
 
-    # 初始化
     clear_screen()
     print_banner()
     tui.echo(f"\n{Colors.BOLD}Initializing XMU Rollcall Bot...{Colors.ENDC}\n")
@@ -169,15 +141,12 @@ def start_monitor(account):
             sys.exit(1)
 
     tui.echo(f"{Colors.OKCYAN}[Step 3/3]{Colors.ENDC} Fetching user profile...")
-    # profile = session.get(f"{base_url}/api/profile", headers=headers).json()
-    # name = profile["name"]
     tui.echo(f"Welcome, {ACCOUNT_NAME}")
 
     tui.echo(f"\n{Colors.OKGREEN}{Colors.BOLD}Initialization complete{Colors.ENDC}")
     tui.echo(f"\n{Colors.GRAY}Starting monitor in 3 seconds...{Colors.ENDC}")
     time.sleep(3)
 
-    # 主循环
     temp_data = {'rollcalls': []}
     query_count = 0
     start_time = time.time()

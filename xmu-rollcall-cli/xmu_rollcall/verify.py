@@ -1,6 +1,5 @@
 import uuid
 import time
-import builtins
 import logging
 from datetime import datetime, timedelta, timezone
 import requests
@@ -22,13 +21,6 @@ headers = {
 }
 
 
-def log_and_print(*args, **kwargs):
-    if not tui.rollcall_output_active():
-        builtins.print(*args, **kwargs)
-    sep = kwargs.get("sep", " ")
-    message = sep.join(str(arg) for arg in args).strip()
-    if message:
-        logger.info(message)
 
 def _api_headers(in_session=None):
     """Build JSON API headers while preserving cookies/auth from the session."""
@@ -84,7 +76,7 @@ def get_number_rollcall_info(in_session, rollcall_id):
 
 
 def submit_number_code(in_session, rollcall_id, number_code, status=None, end_time=None, started_at=None):
-    print = log_and_print
+    print = tui.log_and_print
     answer_url = f"{base_url}/api/rollcall/{rollcall_id}/answer_number_rollcall"
     t00 = started_at or time.time()
 
@@ -114,7 +106,7 @@ def submit_number_code(in_session, rollcall_id, number_code, status=None, end_ti
         return False
 
 def send_code(in_session, rollcall_id, before_submit=None):
-    print = log_and_print
+    print = tui.log_and_print
     print("Trying number code from API...")
     t00 = time.time()
 

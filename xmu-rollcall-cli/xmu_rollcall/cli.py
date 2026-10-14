@@ -21,20 +21,10 @@ from .logging_config import setup_logging
 from .monitor import start_monitor, base_url, headers
 from . import __version__
 from .updates import check_updates
+from .tui import Colors
 
 logger = logging.getLogger(__name__)
 
-# ANSI Color codes
-class Colors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    GRAY = '\033[90m'
 
 @click.group(invoke_without_command=True)
 @click.pass_context
@@ -375,7 +365,6 @@ def radar(account_id, rollcall_id, latitude, longitude, coordinates):
 @cli.command()
 def start():
     """启动签到监控"""
-    # 加载配置
     logger.info("Start command selected")
     config_data = load_config()
 
