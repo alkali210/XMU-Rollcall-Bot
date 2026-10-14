@@ -41,6 +41,9 @@ On Windows, add `--windows-console-mode=force --msvc=latest` and use `--output-f
 ```bash
 git clone --depth 1 -b main https://github.com/alkali210/XMU-Rollcall-Bot.git
 cd XMU-Rollcall-Bot
+
+uv tool install -e xmu-rollcall-cli # Recommended
+# or
 pip install -e xmu-rollcall-cli
 ```
 
@@ -63,10 +66,17 @@ xmu-rollcall switch  # switch between accounts
 xmu-rollcall start   # start the monitor
 xmu-rollcall refresh # refresh login status
 xmu-rollcall check   # check for updates
-
-uv run xmu-rollcall           # open the interactive menu with uv
-uv run xmu-rollcall <command> # run a subcommand with uv
+xmu-rollcall radar <command> # submit a known radar location
 ```
+
+### Submit Known Radar Coordinates
+Usage:
+```bash
+xmu-rollcall radar --latitude <lat> --longitude <lon> [--account-id <id>] [--rollcall-id <id>]
+```
+- `--latitude` / `--longitude`: The parameter name can be omitted: simply type `xmu-rollcall radar 24 118`
+- `--account-id`: Specifies an account; if omitted, the currently selected account is used
+- `--rollcall-id`: If omitted, the data is submitted to the active radar check-in for the current account; if no match is found, an exception is thrown
 
 `refresh` clears the current account's saved login session; the next monitoring run logs in again. The monitor shows the current time, uptime, query count, and polling interval. Pressing `Ctrl+C` clears the screen and displays exit statistics.
 

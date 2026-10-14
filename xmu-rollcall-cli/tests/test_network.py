@@ -33,7 +33,7 @@ class NetworkTests(unittest.TestCase):
 
     def test_monitor_loads_retry_setting(self):
         with patch.object(monitor, "load_config", return_value={"disable_monitor_retry": True}):
-            self.assertEqual(monitor._load_monitor_settings(), (10, True))
+            self.assertEqual(monitor._load_monitor_settings(), (60, True))
 
     def test_retry_reports_original_error_in_red(self):
         error = requests.ConnectionError("Connection reset [details]\nOriginal server error")

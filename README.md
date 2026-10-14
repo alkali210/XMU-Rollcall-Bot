@@ -4,14 +4,12 @@
 > ## 2026-10-12 雷达签到失效
 > 对于不在范围内的提交不会再返回距离了，当前依赖距离计算坐标的方法失效，暂时已在 `main` 分支上移除，与 QR 签到一样按不支持处理。
 >
+> 作为替代，如果已知经纬度（根据上课地点），可以尝试手动或者使用 Agent [提交已知雷达签到坐标](#提交已知雷达签到坐标)。
 > 
-> 作为替代，如果已知经纬度（根据上课地点），可以尝试手动或者使用 Agent [直接提交雷达签到](#直接提交雷达签到)。
-> 
-> > **TODO:** 增加教学地点坐标列表（分校区），自动提交
+> **TODO: 增加教学地点坐标列表（分校区），自动提交**
 
 > [!note]
-> ## 2026-10-10 数字签到取码接口已更新
-> `/api/rollcall/<rollcall_id>/student_rollcalls` -> `/api/timetable_rollcalls?course_ids=<course_id>&rollcall_date=<yyyy-mm-dd>`
+> ### 2026-10-10 数字签到取码接口已更新
 
 ---
 
@@ -64,6 +62,8 @@ uv sync
 #### 全局安装
 
 ```bash
+uv tool install -e . # Recommended
+# or
 pip install -e .
 ```
 
@@ -79,10 +79,21 @@ xmu-rollcall switch  # 切换账号
 xmu-rollcall start   # 启动监控
 xmu-rollcall refresh # 刷新登录状态
 xmu-rollcall check   # 检查更新
+xmu-rollcall radar <command> # 提交已知雷达签到坐标
 xmu-rollcall --help  # 查看帮助
-
-uv run xmu-rollcall [option] # 如果使用 uv
 ```
+
+### 提交已知雷达签到坐标
+
+用法：
+
+```bash
+xmu-rollcall radar --latitude <lat> --longitude <lon> [--account-id <id>] [--rollcall-id <id>]
+```
+
+- `--latitude` / `--longitude`：可以省略参数名，写 `xmu-rollcall radar 24 118` 即可
+- `--account-id`：指定账号，省略时使用当前选中的账号
+- `--rollcall-id`：省略时向当前账号的活动雷达签到提交，查询不到时返回异常
 
 在交互界面中，可以随时按 `Ctrl+C` 退出或者回到主菜单。
 
@@ -136,95 +147,3 @@ uv run xmu-rollcall [option] # 如果使用 uv
 
 在配置菜单中按 `s`，设置提交签到前的等待，正整数表示提交前等待的已签到人数，百分比表示提交前等待的人数比例，`false` 表示不等待，默认值为 `10%`。
 
-## 直接提交雷达签到
-
-### 请求形式
-
-- `PUT` `https://lnt.xmu.edu.cn/api/rollcall/{rollcall_id}/answer`
-- 认证：所选账号已登录会话的 Cookie
-
-### 示例
-
-`submit_radar.py`
-
-```python
-import argparse
-import json
-import math
-import sys
-import uuid
-from pathlib import Path
-
-import requests
-
-sys.path.insert(0, str(Path.cwd() / "xmu-rollcall-cli"))
-from xmu_rollcall.network import REQUEST_TIMEOUT
-from xmu_rollcall.utils import load_session
-from xmu_rollcall.verify import base_url, headers
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Submit one known radar location")
-    parser.add_argument("--account-id", type=int, required=True)
-    parser.add_argument("--rollcall-id", type=int, required=True)
-    parser.add_argument("--latitude", type=float, required=True)
-    parser.add_argument("--longitude", type=float, required=True)
-    args = parser.parse_args()
-    if args.account_id <= 0 or args.rollcall_id <= 0:
-        parser.error("Account ID and rollcall ID must be positive")
-    if (not math.isfinite(args.latitude) or not -90 <= args.latitude <= 90
-            or not math.isfinite(args.longitude) or not -180 <= args.longitude <= 180):
-        parser.error("Latitude must be in [-90, 90]; longitude in [-180, 180]")
-
-    payload = {
-        "accuracy": 35,
-        "altitude": 0,
-        "altitudeAccuracy": None,
-        "deviceId": str(uuid.uuid4()),
-        "heading": None,
-        "latitude": args.latitude,
-        "longitude": args.longitude,
-        "speed": None,
-    }
-    with requests.Session() as session:
-        if not load_session(session, args.account_id):
-            print("No saved session for this account; log in with xmu-rollcall start first.",
-                  file=sys.stderr)
-            return 1
-        try:
-            response = session.put(
-                f"{base_url}/api/rollcall/{args.rollcall_id}/answer",
-                json=payload, headers=headers, timeout=REQUEST_TIMEOUT,
-                allow_redirects=False,
-            )
-        except requests.RequestException as exc:
-            print(f"Request failed; submission outcome unknown: {exc}", file=sys.stderr)
-            return 1
-
-    try:
-        body = response.json()
-    except ValueError:
-        body = response.text
-    print(json.dumps({
-        "account_id": args.account_id,
-        "rollcall_id": args.rollcall_id,
-        "latitude": args.latitude,
-        "longitude": args.longitude,
-        "status_code": response.status_code,
-        "content_type": response.headers.get("Content-Type"),
-        "response": body,
-    }, ensure_ascii=False))
-    return 0 if response.status_code == 200 else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-```
-
-从仓库根目录运行它：
-
-```bash
-python submit_radar.py --account-id 3 --rollcall-id 123456 --latitude 24.1234 --longitude 118.5678
-```
-
-要在 `xmu-rollcall` 中已有保存的登录会话，示例会复用程序的保存会话加载函数。`rollcall_id` 可以在日志中找到。

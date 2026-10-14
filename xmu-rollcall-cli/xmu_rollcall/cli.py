@@ -3,6 +3,11 @@ import logging
 import math
 from decimal import Decimal, InvalidOperation
 import sys
+import json
+import uuid
+import requests
+from .network import REQUEST_TIMEOUT
+from .utils import load_session
 from . import tui
 from xmulogin import xmulogin
 from .config import (
@@ -286,6 +291,88 @@ def config():
     except (click.Abort, KeyboardInterrupt):
         tui.echo("Configuration closed.")
         return
+
+@cli.command()
+@click.option("--account-id", type=click.IntRange(min=1), help="默认使用当前选中的账号。")
+@click.option("--rollcall-id", type=click.IntRange(min=1), help="默认查询该账号未完成的雷达签到。")
+@click.option("--latitude", type=click.FloatRange(-90, 90), help="纬度；也可作为第一个位置参数。")
+@click.option("--longitude", type=click.FloatRange(-180, 180), help="经度；也可作为第二个位置参数。")
+@click.argument("coordinates", nargs=-1, type=float)
+def radar(account_id, rollcall_id, latitude, longitude, coordinates):
+    """使用已知经纬度提交雷达签到，不计算位置"""
+    try:
+        if coordinates:
+            if len(coordinates) != 2 or latitude is not None or longitude is not None:
+                raise click.UsageError("Provide either LATITUDE LONGITUDE or --latitude and --longitude, not both.")
+            latitude, longitude = coordinates
+        if latitude is None or longitude is None:
+            raise click.UsageError("Both latitude and longitude values are required.")
+        if (not math.isfinite(latitude) or not -90 <= latitude <= 90
+                or not math.isfinite(longitude) or not -180 <= longitude <= 180):
+            raise click.UsageError("Latitude must be in [-90, 90]; longitude in [-180, 180].")
+
+        data = load_config()
+        account = get_current_account(data) if account_id is None else get_account_by_id(data, account_id)
+        if not account:
+            raise RuntimeError("No selected account or account not found; run xmu-rollcall config.")
+        account_id = account["id"]
+        logger.info("Radar submission using account id=%s", account_id)
+        with requests.Session() as session:
+            if not load_session(session, account_id):
+                raise RuntimeError("No saved session for this account; log in with xmu-rollcall start first.")
+            if rollcall_id is None:
+                response = session.get(
+                    f"{base_url}/api/radar/rollcalls", headers=headers,
+                    timeout=REQUEST_TIMEOUT, allow_redirects=False,
+                )
+                if response.status_code != 200:
+                    raise RuntimeError(f"Radar rollcall query failed: HTTP {response.status_code}")
+                data = response.json()
+                if not isinstance(data, dict) or not isinstance(data.get("rollcalls"), list):
+                    raise RuntimeError("Radar rollcall query returned an invalid response.")
+                ids = {
+                    row["rollcall_id"] for row in data["rollcalls"]
+                    if isinstance(row, dict) and row.get("is_radar")
+                    and not row.get("is_expired") and row.get("status") != "on_call_fine"
+                    and isinstance(row.get("rollcall_id"), int) and row["rollcall_id"] > 0
+                }
+                if not ids:
+                    raise RuntimeError("No pending radar rollcall found for this account.")
+                if len(ids) != 1:
+                    raise RuntimeError(f"Multiple pending radar rollcalls found: {sorted(ids)}; specify --rollcall-id.")
+                rollcall_id = ids.pop()
+            logger.info("Submitting radar rollcall id=%s latitude=%s longitude=%s",
+                        rollcall_id, latitude, longitude)
+            response = session.put(
+                f"{base_url}/api/rollcall/{rollcall_id}/answer",
+                json={
+                    "accuracy": 35, "altitude": 0, "altitudeAccuracy": None,
+                    "deviceId": str(uuid.uuid4()), "heading": None,
+                    "latitude": latitude, "longitude": longitude, "speed": None,
+                },
+                headers=headers, timeout=REQUEST_TIMEOUT, allow_redirects=False,
+            )
+            try:
+                body = response.json()
+            except ValueError:
+                body = response.text
+            result = json.dumps({
+                "account_id": account_id, "rollcall_id": rollcall_id,
+                "latitude": latitude, "longitude": longitude,
+                "status_code": response.status_code,
+                "content_type": response.headers.get("Content-Type"), "response": body,
+            }, ensure_ascii=False)
+            click.echo(result)
+            logger.info("Radar submission result: %s", result)
+            if response.status_code != 200:
+                raise RuntimeError(f"Radar submission failed: HTTP {response.status_code}")
+    except click.ClickException:
+        logger.exception("Invalid radar command")
+        raise
+    except Exception as exc:
+        logger.exception("Radar command failed")
+        raise click.ClickException(str(exc)) from exc
+
 
 @cli.command()
 def start():
