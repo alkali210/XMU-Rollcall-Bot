@@ -1,4 +1,4 @@
-"""Network failure classification shared by monitoring and API calls."""
+"""Shared LNT request settings and network failure classification."""
 import ssl
 import requests
 
@@ -6,6 +6,31 @@ REQUEST_TIMEOUT = (10, 30)
 RETRY_INITIAL_DELAY = 5
 RETRY_MAX_DELAY = 60
 RETRY_MAX_ATTEMPTS = 10
+
+BASE_URL = "https://lnt.xmu.edu.cn"
+USER_AGENT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/142.0.0.0 Safari/537.36"
+    ),
+}
+BROWSER_HEADERS = {
+    **USER_AGENT_HEADERS,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+    "Referer": "https://ids.xmu.edu.cn/authserver/login",
+}
+
+
+def api_headers(session):
+    """Preserve session authentication headers while selecting JSON API headers."""
+    return {
+        **BROWSER_HEADERS,
+        **session.headers,
+        "Accept": "application/json, text/plain, */*",
+        "Referer": f"{BASE_URL}/",
+    }
 
 
 def _is_ssl_eof(exc):

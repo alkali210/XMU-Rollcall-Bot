@@ -8,7 +8,7 @@ import uuid
 import requests
 from .network import REQUEST_TIMEOUT
 from .utils import load_session
-from . import tui
+from . import network, tui
 from xmulogin import xmulogin
 from .config import (
     load_config, save_config, is_config_complete,
@@ -18,7 +18,7 @@ from .config import (
     get_disable_monitor_retry
 )
 from .logging_config import setup_logging
-from .monitor import start_monitor, base_url, headers
+from .monitor import start_monitor
 from . import __version__
 from .updates import check_updates
 from .tui import Colors
@@ -114,7 +114,7 @@ def config():
 
             tui.echo(f"{Colors.OKCYAN}Fetching user profile...{Colors.ENDC}")
             try:
-                profile = session.get(f"{base_url}/api/profile", headers=headers).json()
+                profile = session.get(f"{network.BASE_URL}/api/profile", headers=network.BROWSER_HEADERS).json()
                 name = profile.get("name", "")
                 tui.echo(f"{Colors.OKGREEN}Welcome, {name}!{Colors.ENDC}")
             except Exception:
@@ -310,7 +310,7 @@ def radar(account_id, rollcall_id, latitude, longitude, coordinates):
                 raise RuntimeError("No saved session for this account; log in with xmu-rollcall start first.")
             if rollcall_id is None:
                 response = session.get(
-                    f"{base_url}/api/radar/rollcalls", headers=headers,
+                    f"{network.BASE_URL}/api/radar/rollcalls", headers=network.BROWSER_HEADERS,
                     timeout=REQUEST_TIMEOUT, allow_redirects=False,
                 )
                 if response.status_code != 200:
@@ -332,13 +332,13 @@ def radar(account_id, rollcall_id, latitude, longitude, coordinates):
             logger.info("Submitting radar rollcall id=%s latitude=%s longitude=%s",
                         rollcall_id, latitude, longitude)
             response = session.put(
-                f"{base_url}/api/rollcall/{rollcall_id}/answer",
+                f"{network.BASE_URL}/api/rollcall/{rollcall_id}/answer",
                 json={
                     "accuracy": 35, "altitude": 0, "altitudeAccuracy": None,
                     "deviceId": str(uuid.uuid4()), "heading": None,
                     "latitude": latitude, "longitude": longitude, "speed": None,
                 },
-                headers=headers, timeout=REQUEST_TIMEOUT, allow_redirects=False,
+                headers=network.BROWSER_HEADERS, timeout=REQUEST_TIMEOUT, allow_redirects=False,
             )
             try:
                 body = response.json()

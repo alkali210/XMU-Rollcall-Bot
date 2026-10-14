@@ -3,7 +3,7 @@ import sys
 import requests
 import logging
 from xmulogin import xmulogin
-from . import tui
+from . import network, tui
 from rich.live import Live
 from .logging_config import setup_logging
 from .network import REQUEST_TIMEOUT, RETRY_INITIAL_DELAY, RETRY_MAX_DELAY, RETRY_MAX_ATTEMPTS, is_retryable
@@ -14,18 +14,7 @@ from .tui import Colors
 
 logger = logging.getLogger(__name__)
 
-base_url = "https://lnt.xmu.edu.cn"
 interval = DEFAULT_INTERVAL
-headers = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/142.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "zh-CN,zh;q=0.9",
-    "Referer": "https://ids.xmu.edu.cn/authserver/login",
-}
 
 
 def _load_monitor_settings():
@@ -103,7 +92,7 @@ def start_monitor(account):
     ACCOUNT_ID = account.get('id', 1)
     ACCOUNT_NAME = account.get('name', '')
 
-    rollcalls_url = f"{base_url}/api/radar/rollcalls"
+    rollcalls_url = f"{network.BASE_URL}/api/radar/rollcalls"
     session = None
     logger.info("Starting monitor for account id=%s name=%s", ACCOUNT_ID, ACCOUNT_NAME or USERNAME)
     logger.info("Log file: %s", log_file)
@@ -178,7 +167,7 @@ def start_monitor(account):
 
                 if elapsed > _last_query_time + interval - 1:
                     _last_query_time = elapsed
-                    response = session.get(rollcalls_url, headers=headers, timeout=REQUEST_TIMEOUT)
+                    response = session.get(rollcalls_url, headers=network.BROWSER_HEADERS, timeout=REQUEST_TIMEOUT)
                     response.raise_for_status()
                     data = response.json()
                     query_count += 1

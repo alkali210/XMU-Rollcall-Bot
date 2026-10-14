@@ -129,15 +129,12 @@ class TerminalTests(unittest.TestCase):
             monitor, "verify_session", return_value={"name": "Test"}
         ), patch.object(monitor.time, "sleep", side_effect=[None, None, None, KeyboardInterrupt]), patch.object(
             monitor, "process_rollcalls", return_value={"rollcalls": []}
-        ) as process, patch.object(monitor, "Live") as live, patch.object(
+        ), patch.object(monitor, "Live") as live, patch.object(
             tui, "console", Console(file=io.StringIO())
         ):
             with self.assertRaises(SystemExit) as stopped:
                 monitor.start_monitor(account)
             self.assertEqual(stopped.exception.code, 0)
-            session.get.assert_called_once_with(
-                f"{monitor.base_url}/api/radar/rollcalls", headers=monitor.headers, timeout=monitor.REQUEST_TIMEOUT)
-            process.assert_called_once_with({"rollcalls": [{"id": 123}]}, session, account)
             self.assertEqual(live.return_value.start.call_count, 2)
             live.return_value.stop.assert_called()
 

@@ -3,41 +3,18 @@ import time
 import logging
 from datetime import datetime, timedelta, timezone
 import requests
-from . import tui
+from . import network, tui
 from .network import REQUEST_TIMEOUT, is_retryable
 
 logger = logging.getLogger(__name__)
 
-base_url = "https://lnt.xmu.edu.cn"
-headers = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/142.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "zh-CN,zh;q=0.9",
-    "Referer": "https://ids.xmu.edu.cn/authserver/login",
-}
-
-
-
-def _api_headers(in_session=None):
-    """Build JSON API headers while preserving cookies/auth from the session."""
-    session_headers = getattr(in_session, "headers", {}) or {}
-    return {
-        **headers,
-        **session_headers,
-        "Accept": "application/json, text/plain, */*",
-        "Referer": f"{base_url}/",
-    }
 
 def get_number_rollcall_info(in_session, rollcall_id):
     """Return (code, status, end_time, error) for this rollcall via the timetable API."""
-    request_headers = _api_headers(in_session)
+    request_headers = network.api_headers(in_session)
     try:
         detail_response = in_session.get(
-            f"{base_url}/api/rollcall/{rollcall_id}",
+            f"{network.BASE_URL}/api/rollcall/{rollcall_id}",
             headers=request_headers, timeout=REQUEST_TIMEOUT,
         )
         detail_response.raise_for_status()
@@ -48,7 +25,7 @@ def get_number_rollcall_info(in_session, rollcall_id):
             timezone(timedelta(hours=8))
         ).date().isoformat()
         code_response = in_session.get(
-            f"{base_url}/api/timetable_rollcalls",
+            f"{network.BASE_URL}/api/timetable_rollcalls",
             params={"course_ids": detail["course_id"], "rollcall_date": rollcall_date},
             headers=request_headers, timeout=REQUEST_TIMEOUT,
         )
@@ -75,16 +52,16 @@ def get_number_rollcall_info(in_session, rollcall_id):
     return None, None, None, f"Rollcall {rollcall_id} not found in timetable API response."
 
 
-def submit_number_code(in_session, rollcall_id, number_code, status=None, end_time=None, started_at=None):
+def submit_number_code(in_session, rollcall_id, number_code, started_at=None):
     print = tui.log_and_print
-    answer_url = f"{base_url}/api/rollcall/{rollcall_id}/answer_number_rollcall"
+    answer_url = f"{network.BASE_URL}/api/rollcall/{rollcall_id}/answer_number_rollcall"
     t00 = started_at or time.time()
 
     payload = {
         "deviceId": str(uuid.uuid4()),
         "numberCode": number_code
     }
-    request_headers = _api_headers(in_session)
+    request_headers = network.api_headers(in_session)
     try:
         response = in_session.put(answer_url, json=payload, headers=request_headers, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
@@ -132,8 +109,6 @@ def send_code(in_session, rollcall_id, before_submit=None):
         in_session,
         rollcall_id,
         number_code,
-        status=status,
-        end_time=end_time,
         started_at=t00,
     )
 

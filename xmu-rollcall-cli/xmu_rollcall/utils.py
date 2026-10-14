@@ -1,23 +1,7 @@
-import os
 import requests
-from . import secure_store
+from . import network, secure_store
 from .network import REQUEST_TIMEOUT
 
-base_url = "https://lnt.xmu.edu.cn"
-headers = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/142.0.0.0 Safari/537.36"
-    )
-}
-
-def clear_screen():
-    """清屏"""
-    if os.name == 'nt':
-        os.system('cls')
-    else:
-        os.system('clear')
 
 
 def save_session(sess: requests.Session, account_id: int):
@@ -42,7 +26,7 @@ def load_session(sess: requests.Session, account_id: int):
 def verify_session(sess: requests.Session) -> dict:
     """验证session是否有效"""
     try:
-        resp = sess.get(f"{base_url}/api/profile", headers=headers, timeout=REQUEST_TIMEOUT)
+        resp = sess.get(f"{network.BASE_URL}/api/profile", headers=network.USER_AGENT_HEADERS, timeout=REQUEST_TIMEOUT)
         if resp.status_code not in (401, 403):
             resp.raise_for_status()
         if resp.status_code == 200:
@@ -57,6 +41,4 @@ def verify_session(sess: requests.Session) -> dict:
         # SSL error may occur when start the monitor, even if the connection is stable.
         # Let it be handled by the caller, and retry with password.
         pass
-    except requests.RequestException:
-        raise
     return {}

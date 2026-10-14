@@ -1,10 +1,10 @@
 import time
 import logging
-from . import tui
+from . import network, tui
 from .network import is_retryable
 from decimal import Decimal, ROUND_CEILING
 from datetime import datetime
-from .verify import send_code, base_url
+from .verify import send_code
 from .config import get_rollcall_settings, normalize_rollcall_settings
 
 logger = logging.getLogger(__name__)
@@ -53,7 +53,7 @@ def _fetch_attendance(session, rollcall_id):
     """Return signed and total students, or None for unavailable data."""
     try:
         resp = session.get(
-            f"{base_url}/api/rollcall/{rollcall_id}/student_rollcalls",
+            f"{network.BASE_URL}/api/rollcall/{rollcall_id}/student_rollcalls",
             timeout=10,
         )
         resp.raise_for_status()
@@ -68,10 +68,6 @@ def _fetch_attendance(session, rollcall_id):
         logger.debug("Failed to fetch signed count for rollcall_id=%s: %s", rollcall_id, exc)
     return None
 
-
-def _fetch_signed_count(session, rollcall_id):
-    attendance = _fetch_attendance(session, rollcall_id)
-    return attendance[0] if attendance is not None else None
 
 def _choose_wait_target(settings):
     wait_value = settings.get("wait_before_answer", False)
@@ -149,12 +145,8 @@ def wait_for_classmates(session, rollcall_id, settings, number_code=None, *, end
 
 def process_rollcalls(data, session, account=None):
     """处理签到数据"""
-    data_empty = {'rollcalls': []}
     result = handle_rollcalls(data, session, account)
-    if False in result:
-        return data_empty
-    else:
-        return data
+    return {'rollcalls': []} if False in result else data
 
 def extract_rollcalls(data):
     """提取签到信息"""
