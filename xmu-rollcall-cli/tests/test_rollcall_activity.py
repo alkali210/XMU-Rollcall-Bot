@@ -56,19 +56,22 @@ class RollcallActivityTests(unittest.TestCase):
     def test_batch_results_and_branch_outcomes(self):
         calls = [rollcall(status="on_call_fine"),
                  rollcall(is_radar=True), rollcall(is_number=False)]
+        session = Mock()
         with tui.rollcall_activity("同学", "1m", 12, 10) as view, patch.object(
             handler, "get_rollcall_settings", return_value={"wait_before_answer": False}
-        ), patch.object(handler, "send_radar", return_value=False) as radar, patch.object(
+        ), patch.object(handler, "wait_for_classmates") as wait, patch.object(
             handler.time, "sleep"
         ) as sleep:
-            result = handler.process_rollcalls({"rollcalls": calls}, Mock())
+            result = handler.process_rollcalls({"rollcalls": calls}, session)
             self.assertEqual(view.data["state"], "unsupported")
             self.assertEqual(len(view.results), 2)
             self.assertIn("already", view.results[0].plain)
-            self.assertIn("failed", view.results[1].plain)
+            self.assertIn("unsupported", view.results[1].plain)
             self.assertIsNone(view.data["number_code"])
-        radar.assert_called_once()
-        sleep.assert_called_once_with(300)
+        session.get.assert_not_called()
+        session.put.assert_not_called()
+        wait.assert_not_called()
+        self.assertEqual(sleep.call_args_list, [unittest.mock.call(300), unittest.mock.call(300)])
         self.assertEqual(result, {"rollcalls": []})
 
     def test_error_and_interrupt_restore_output_and_propagate(self):

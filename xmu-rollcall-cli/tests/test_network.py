@@ -239,7 +239,6 @@ class NetworkTests(unittest.TestCase):
         for operation in (
             lambda s: verify.get_number_rollcall_info(s, 42),
             lambda s: verify.submit_number_code(s, 42, "1234"),
-            lambda s: verify.send_radar(s, 42),
             lambda s: rollcall_handler._fetch_attendance(s, 42),
         ):
             with self.subTest(operation=operation):

@@ -4,7 +4,7 @@ import logging
 from . import tui
 from .network import is_retryable
 from decimal import Decimal, ROUND_CEILING
-from .verify import send_code, send_radar, base_url
+from .verify import send_code, base_url
 from .config import get_rollcall_settings, normalize_rollcall_settings
 
 logger = logging.getLogger(__name__)
@@ -203,17 +203,8 @@ def handle_rollcalls(data, session, account=None):
                 print("Already answered.")
                 answer_status[i] = True
                 tui.update_rollcall(state="already")
-            elif rollcalls[i]['is_radar']:
-                wait_for_classmates(session, rollcalls[i]['rollcall_id'], settings)
-                tui.update_rollcall(state="submitting")
-                if send_radar(session, rollcalls[i]['rollcall_id']):
-                    answer_status[i] = True
-                else:
-                    print("Answering failed.")
-                tui.update_rollcall(state="success" if answer_status[i] else "failed")
             else:
-                # TODO: qrcode rollcall
-                print("Answering failed. QRcode rollcall not supported yet.")
+                print(f"Answering failed. {temp_str} not supported yet.")
                 print("Waiting for 5 minutes before next attempt...")
                 tui.update_rollcall(state="unsupported")
                 time.sleep(300)

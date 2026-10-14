@@ -11,7 +11,6 @@ Automatic Check-In Program for XMU(Tronclass), **Intended for educational and re
 - Monitor rollcall status in real-time
 - Perform rollcall automatically:
   - Number rollcall: get number code from API
-  - Radar rollcall: solve the location using two points
 - Supports waiting until a certain number of classmates have checked in before submitting
 - Supports multiple accounts, stores encrypted account informations and sessions in sqlite
 - Record the rollcall status in a log file
@@ -73,7 +72,7 @@ uv run xmu-rollcall <command> # run a subcommand with uv
 
 Logs are stored as `xmu_rollcall.log` in the configuration directory.
 
-> Currently unable to resolve the QR code rollcall, when a QR code rollcall is detected, the monitor will pause for 5 minutes to prevent repeated requests within a short period of time.
+> Automatic QR code and radar rollcalls are not supported. When an unfinished rollcall of either type is detected, the monitor reports it as unsupported and pauses for 5 minutes to prevent repeated requests. Radar coordinate calculation has been removed; the monitor does not submit coordinates.
 
 ## Configuration
 
