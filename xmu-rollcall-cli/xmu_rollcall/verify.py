@@ -1,7 +1,7 @@
 import uuid
 import time
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import requests
 from . import network, tui
 from .network import REQUEST_TIMEOUT, is_retryable
@@ -22,7 +22,7 @@ def get_number_rollcall_info(in_session, rollcall_id):
         if not isinstance(detail, dict) or not detail.get("course_id") or not detail.get("rollcall_time"):
             return None, None, None, "Failed to get rollcall course or time from API response."
         rollcall_date = datetime.fromisoformat(detail["rollcall_time"]).astimezone(
-            timezone(timedelta(hours=8))
+            timezone.utc
         ).date().isoformat()
         code_response = in_session.get(
             f"{network.BASE_URL}/api/timetable_rollcalls",

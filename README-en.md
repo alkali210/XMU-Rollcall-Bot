@@ -11,6 +11,7 @@ Automatic Check-In Program for XMU(Tronclass), **Intended for educational and re
 - Monitor rollcall status in real-time
 - Perform rollcall automatically:
   - Number rollcall: get number code from API
+    The timetable API is queried using the rollcall's UTC date, avoiding date mismatches before 08:00 Beijing time.
 - Supports waiting until a certain number of classmates have checked in before submitting
 - Supports multiple accounts, stores encrypted account informations and sessions in sqlite
 - Record the rollcall status in a log file

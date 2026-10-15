@@ -33,12 +33,21 @@ class NumberRollcallTests(unittest.TestCase):
         self.assertEqual(verify.get_number_rollcall_info(session, 446055),
                          ("0026", "ongoing", "2026-10-10T02:42:40Z", None))
 
-    def test_campus_date_crosses_utc_midnight(self):
-        session = self.session([{"id": 446055, "number_code": "4407"}],
-                               rollcall_time="2026-10-09T16:05:00Z")
-        self.assertEqual(verify.get_number_rollcall_info(session, 446055)[0], "4407")
-        self.assertEqual(session.get.call_args.kwargs["params"],
-                         {"course_ids": 113897, "rollcall_date": "2026-10-10"})
+    def test_finds_early_morning_rollcall_by_utc_date(self):
+        for stamp in ("2026-10-14T23:54:31Z", "2026-10-15T07:54:31+08:00"):
+            with self.subTest(rollcall_time=stamp):
+                session = self.session([])
+
+                def get(url, **kwargs):
+                    if url.endswith("/api/rollcall/454911"):
+                        return response({"course_id": 109559, "rollcall_time": stamp})
+                    rows = ([{"id": 454911, "number_code": "0026"}]
+                            if kwargs["params"]["rollcall_date"] == "2026-10-14" else [])
+                    return response({"rollcalls": rows})
+
+                session.get.side_effect = get
+                self.assertEqual(verify.get_number_rollcall_info(session, 454911),
+                                 ("0026", None, None, None))
 
     def test_missing_rollcall_or_code_never_submits_another_code(self):
         for rows in ([{"id": 446054, "number_code": "9999"}],
