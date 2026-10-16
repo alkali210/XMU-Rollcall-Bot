@@ -56,7 +56,8 @@ class NetworkTests(unittest.TestCase):
         self.assertIn("retry limit reached (10 retries)", rendered.plain)
         log.assert_called_once_with(rendered.plain)
 
-    def run_monitor(self, outcomes, process=None, interrupt_delay=None, disable_retry=False):
+    def run_monitor(self, outcomes, process=None, interrupt_delay=None, disable_retry=False,
+                    terminal_output=None):
         session = Mock()
         session.get.side_effect = outcomes
         clock = [1000.0]
@@ -72,19 +73,26 @@ class NetworkTests(unittest.TestCase):
             for name, value in {
                 "setup_logging": None, "_load_monitor_settings": (10, disable_retry),
                 "has_saved_session": True, "load_session": True,
-                "verify_session": {"name": "Test"}, "clear_screen": None,
+                "verify_session": {"name": "Test"},
             }.items():
                 stack.enter_context(patch.object(monitor, name, return_value=value))
+            if terminal_output is None:
+                stack.enter_context(patch.object(monitor, "clear_screen"))
             stack.enter_context(patch.object(monitor.requests, "Session", return_value=session))
             stack.enter_context(patch.object(monitor.time, "time", side_effect=lambda: clock[0]))
             stack.enter_context(patch.object(monitor.time, "sleep", side_effect=sleep))
-            live = stack.enter_context(patch.object(monitor, "Live")).return_value
-            output = io.StringIO()
-            stack.enter_context(patch.object(monitor.tui, "console", Console(file=output)))
+            if terminal_output is None:
+                live = stack.enter_context(patch.object(monitor, "Live")).return_value
+            output = terminal_output if terminal_output is not None else io.StringIO()
+            stack.enter_context(patch.object(monitor.tui, "console", Console(
+                file=output, force_terminal=terminal_output is not None, legacy_windows=False,
+                _environ={"TERM": "xterm-256color"},
+            )))
             handler = stack.enter_context(patch.object(monitor, "process_rollcalls", side_effect=process))
             with self.assertRaises(SystemExit) as stopped:
                 monitor.start_monitor({"id": 1, "username": "test", "password": "unused"})
-        live.stop.assert_called()
+        if terminal_output is None:
+            live.stop.assert_called()
         return stopped.exception.code, sleeps, session, handler, output.getvalue()
 
     def test_disconnect_backoff_cap_recovery_and_reset(self):
@@ -94,9 +102,33 @@ class NetworkTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual([s for s in sleeps if s >= 5], [5, 10, 20, 40, 60, 60, 60, 5])
         self.assertEqual(session.get.call_count, 11)
-        self.assertIn("Network recovered", output)
         for call in session.get.call_args_list:
             self.assertEqual(call.kwargs["timeout"], network.REQUEST_TIMEOUT)
+
+    def test_each_recovery_clears_retry_output_before_redrawing(self):
+        output = io.StringIO()
+        checkpoints = []
+        outcomes = iter([
+            requests.ConnectionError(), requests.Timeout(), response(),
+            requests.Timeout(), response(), KeyboardInterrupt(),
+        ])
+
+        def fetch(*args, **kwargs):
+            checkpoints.append(output.getvalue())
+            outcome = next(outcomes)
+            if isinstance(outcome, BaseException):
+                raise outcome
+            return outcome
+
+        code, _, _, _, _ = self.run_monitor(fetch, terminal_output=output)
+
+        self.assertEqual(code, 0)
+        # These slices start at a successful request after one or more failures.
+        # A terminal erase must precede the resumed live frame, on every recovery.
+        for before, after in ((2, 3), (4, 5)):
+            with self.subTest(recovery=before):
+                resumed = checkpoints[after][len(checkpoints[before]):]
+                self.assertTrue(resumed.startswith("\x1b[2J\x1b[H"))
 
     def test_monitor_stops_after_ten_retries(self):
         code, sleeps, session, _, output = self.run_monitor(
@@ -146,7 +178,6 @@ class NetworkTests(unittest.TestCase):
                 code, sleeps, _, _, output = self.run_monitor([error, response(), KeyboardInterrupt()])
                 self.assertEqual(code, 0)
                 self.assertEqual([s for s in sleeps if s >= 5], [5])
-                self.assertIn("Network recovered", output)
 
     def test_certificate_and_other_ssl_errors_are_not_retryable(self):
         for error in (ssl.SSLCertVerificationError(1, "CERTIFICATE_VERIFY_FAILED"),

@@ -161,7 +161,7 @@ def start_monitor(account):
                 current_time = time.time()
 
                 elapsed = int(current_time - start_time)
-                if elapsed != last_display_second:
+                if not recovering and elapsed != last_display_second:
                     last_display_second = elapsed
                     live.update(monitor_dashboard(ACCOUNT_NAME, start_time, query_count), refresh=True)
 
@@ -172,7 +172,14 @@ def start_monitor(account):
                     data = response.json()
                     query_count += 1
 
-                    live.update(monitor_dashboard(ACCOUNT_NAME, start_time, query_count), refresh=True)
+                    if recovering:
+                        logger.info("Network recovered; monitoring resumed")
+                        clear_screen()
+                        live.update(monitor_dashboard(ACCOUNT_NAME, start_time, query_count))
+                        live.start(refresh=True)
+                        recovering = False
+                    else:
+                        live.update(monitor_dashboard(ACCOUNT_NAME, start_time, query_count), refresh=True)
 
                     if temp_data != data:
                         if len(data['rollcalls']) > 0:
@@ -190,10 +197,6 @@ def start_monitor(account):
                             live.start(refresh=True)
                         else:
                             temp_data = data
-                    if recovering:
-                        logger.info("Network recovered; monitoring resumed")
-                        tui.echo("Network recovered; monitoring resumed.")
-                    recovering = False
                     retry_delay = RETRY_INITIAL_DELAY
                     retries = 0
             except KeyboardInterrupt:
@@ -201,6 +204,7 @@ def start_monitor(account):
             except Exception as e:
                 if not disable_monitor_retry and is_retryable(e):
                     live.stop()
+                    clear_screen()
                     if retries >= RETRY_MAX_ATTEMPTS:
                         _report_retry_limit(e)
                         sys.exit(1)
@@ -212,8 +216,6 @@ def start_monitor(account):
                     time.sleep(retry_delay)
                     retry_delay = min(retry_delay * 2, RETRY_MAX_DELAY)
                     _last_query_time = -interval
-                    live.update(monitor_dashboard(ACCOUNT_NAME, start_time, query_count))
-                    live.start(refresh=True)
                     continue
                 live.stop()
                 logger.exception("Monitor exited because of an error: %s", str(e))

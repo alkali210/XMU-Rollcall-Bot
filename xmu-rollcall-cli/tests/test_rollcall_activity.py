@@ -74,6 +74,19 @@ class RollcallActivityTests(unittest.TestCase):
         self.assertEqual(sleep.call_args_list, [unittest.mock.call(300), unittest.mock.call(300)])
         self.assertEqual(result, {"rollcalls": []})
 
+    def test_unsupported_rollcalls_keep_their_actual_type(self):
+        for is_radar, wrong_type in ((True, "QRcode"), (False, "Radar")):
+            with self.subTest(is_radar=is_radar):
+                self.output.seek(0)
+                self.output.truncate()
+                with tui.rollcall_activity("同学", "1m", 12, 10), patch.object(
+                    handler.time, "sleep"
+                ):
+                    handler.process_rollcalls(
+                        {"rollcalls": [rollcall(is_radar=is_radar, is_number=False)]}, Mock()
+                    )
+                self.assertNotIn(wrong_type, self.output.getvalue())
+
     def test_error_and_interrupt_restore_output_and_propagate(self):
         for error, state in [(requests.Timeout("offline"), "failed"),
                              (KeyboardInterrupt(), "interrupted")]:

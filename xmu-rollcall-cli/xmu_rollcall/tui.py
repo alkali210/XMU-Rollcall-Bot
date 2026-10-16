@@ -81,6 +81,8 @@ class RollcallView:
         data = self.data
         if not data:
             return frame(Text("Reading rollcall details…"), "Rollcall activity")
+        rollcall = data["rollcall"]
+        kind = "Radar" if rollcall["is_radar"] else "Number" if rollcall["is_number"] else "QRcode"
         state = data["state"]
         title, color, detail = {
             "detected": ("New rollcall found", "cyan", "Reading rollcall details"),
@@ -90,11 +92,9 @@ class RollcallView:
             "success": ("Rollcall answered", "green", "Answer confirmed"),
             "failed": ("Answering failed", "red", "No confirmation received · see log for details"),
             "already": ("Already answered", "green", "No submission needed"),
-            "unsupported": ("QRcode not supported", "yellow", "Please sign in manually · next attempt in 5 minutes"),
+            "unsupported": (f"{kind} not supported", "yellow", "Please sign in manually · next attempt in 5 minutes"),
             "interrupted": ("Interrupted", "yellow", "Processing stopped"),
         }[state]
-        rollcall = data["rollcall"]
-        kind = "Radar" if rollcall["is_radar"] else "Number" if rollcall["is_number"] else "QRcode"
         content = [menu_rows([
             ("Course", str(rollcall["course_title"])),
             ("Created by", f"{rollcall['department_name']} · {rollcall['created_by_name']}"),
