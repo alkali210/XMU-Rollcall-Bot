@@ -53,7 +53,7 @@ uv sync
 
 ## Usage
 
-Run `xmu-rollcall` without arguments to open the Rich interactive menu. Enter `1`–`5` or `config` / `switch` / `start` / `refresh` / `check`, and press `Ctrl-C` to exit. Configuration, account switching, session refresh, and update checks return to the menu after completion. After selecting `start`, pressing `Ctrl-C` exits the application directly. Existing subcommands still work directly. Panels adapt to the terminal width.
+Run `xmu-rollcall` without arguments to open the Rich interactive menu. Enter `1`–`6` or `config` / `switch` / `start` / `refresh` / `check` / `update` (`upgrade` is the same command), and press `Ctrl-C` to exit. Configuration, account switching, session refresh, update checks, and upgrades return to the menu after completion. After selecting `start`, pressing `Ctrl-C` exits the application directly. Existing subcommands still work directly. Panels adapt to the terminal width.
 
 ```bash
 xmu-rollcall         # open the interactive menu
@@ -62,6 +62,7 @@ xmu-rollcall switch  # switch between accounts
 xmu-rollcall start   # start the monitor
 xmu-rollcall refresh # refresh login status
 xmu-rollcall check   # check for updates
+xmu-rollcall update  # upgrade this program from this repository (alias: upgrade)
 xmu-rollcall radar [options] [coordinates] # submit a known radar location
 ```
 
@@ -73,6 +74,8 @@ xmu-rollcall radar --latitude <lat> --longitude <lon> [--account-id <id>] [--rol
 - `--latitude` / `--longitude`: The parameter name can be omitted: simply type `xmu-rollcall radar 24 118`
 - `--account-id`: Specifies an account; if omitted, the currently selected account is used
 - `--rollcall-id`: If omitted, the data is submitted to the active radar check-in for the current account; if no match is found, an exception is thrown
+
+`check` only looks for updates. `update` (alias: `upgrade`, menu item `6`) upgrades the program from alkali210/XMU-Rollcall-Bot. It guesses whether this process looks like a uv tool install or a pip/venv install, prints that guess and the exact command, and asks for confirmation before running it. `uv` being on `PATH` is not used. `--uv` forces `uv tool install --upgrade --force git+https://github.com/alkali210/XMU-Rollcall-Bot.git#subdirectory=xmu-rollcall-cli`; `--pip` forces `pip install --upgrade` of that same URL. A non-interactive run installs only when `--yes` is combined with `--uv` or `--pip`. Saved accounts under `~/.xmu_rollcall` are left unchanged.
 
 `refresh` clears the current account's saved login session; the next monitoring run logs in again. The monitor shows the current time, uptime, query count, and polling interval. Pressing `Ctrl+C` clears the screen and displays exit statistics.
 

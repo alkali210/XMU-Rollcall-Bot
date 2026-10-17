@@ -69,6 +69,7 @@ xmu-rollcall switch  # 切换账号
 xmu-rollcall start   # 启动监控
 xmu-rollcall refresh # 刷新登录状态
 xmu-rollcall check   # 检查更新
+xmu-rollcall update  # 升级程序（upgrade 为同一命令）
 xmu-rollcall radar [options] [coordinates] # 提交已知雷达签到坐标
 xmu-rollcall --help  # 查看帮助
 ```
@@ -84,6 +85,8 @@ xmu-rollcall radar --latitude <lat> --longitude <lon> [--account-id <id>] [--rol
 - `--latitude` / `--longitude`：可以省略参数名，写 `xmu-rollcall radar 24 118` 即可
 - `--account-id`：指定账号，省略时使用当前选中的账号
 - `--rollcall-id`：省略时向当前账号的活动雷达签到提交，查询不到时返回异常
+
+`check` 只检查更新。`update` / `upgrade` 会升级程序：根据当前进程的安装位置猜测是 uv tool 还是 pip，打印将要执行的命令并要求确认后才安装。PATH 里有没有 `uv` 不影响猜测。显式的 `xmu-rollcall update --uv` 或 `--pip` 覆盖猜测。非交互运行必须同时带上 `--yes` 和 `--uv` 或 `--pip`，否则不会安装。交互菜单中对应 `6` / `update`（`upgrade` 相同；`5` 仍是检查更新）。安装地址是 alkali210/XMU-Rollcall-Bot：`git+https://github.com/alkali210/XMU-Rollcall-Bot.git#subdirectory=xmu-rollcall-cli`。该命令只升级程序，不修改 `~/.xmu_rollcall` 里的账号。
 
 在交互界面中，可以随时按 `Ctrl+C` 退出或者回到主菜单。
 
