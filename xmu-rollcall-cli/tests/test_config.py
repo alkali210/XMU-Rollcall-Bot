@@ -83,6 +83,52 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(reloaded["accounts"][0]["rollcall_settings"]["wait_before_answer"], 9)
         self.assertEqual(len(json.loads(config.CONFIG_FILE.read_text())["accounts"]), 1)
 
+    def test_start_id_matches_switch_then_start_and_persists(self):
+        self.seed()
+        loaded = config.load_config()
+        config.add_account(loaded, "second", "password2", "Second")
+        config.set_rollcall_settings(loaded["accounts"][1], {"wait_before_answer": 9})
+        config.save_config(loaded)
+        observed = []
+
+        def observe_start(account):
+            observed.append((account, config.load_config()))
+
+        with patch("xmu_rollcall.cli.setup_logging"), patch(
+            "xmu_rollcall.cli.start_monitor", side_effect=observe_start
+        ):
+            runner = CliRunner()
+            switched = runner.invoke(cli, ["switch"], input="2\n")
+            self.assertEqual(switched.exit_code, 0, switched.output)
+            started = runner.invoke(cli, ["start"])
+            self.assertEqual(started.exit_code, 0, started.output)
+
+            loaded = config.load_config()
+            config.set_current_account(loaded, 1)
+            config.save_config(loaded)
+            direct = runner.invoke(cli, ["start", "--id", "2"])
+            self.assertEqual(direct.exit_code, 0, direct.output)
+            self.assertEqual(observed[1], observed[0])
+            self.assertEqual(observed[1][0]["id"], 2)
+            self.assertEqual(observed[1][1]["current_account_id"], 2)
+
+            subsequent = runner.invoke(cli, ["start"])
+            self.assertEqual(subsequent.exit_code, 0, subsequent.output)
+            self.assertEqual(observed[2], observed[1])
+
+    def test_start_invalid_id_preserves_current_account(self):
+        self.seed()
+        before = config.load_config()
+        with patch("xmu_rollcall.cli.setup_logging"), patch(
+            "xmu_rollcall.cli.start_monitor"
+        ) as monitor:
+            for account_id in ("99", "0", "-1", "invalid"):
+                with self.subTest(account_id=account_id):
+                    result = CliRunner().invoke(cli, ["start", "--id", account_id])
+                    self.assertNotEqual(result.exit_code, 0)
+                    self.assertEqual(config.load_config(), before)
+            monitor.assert_not_called()
+
     def test_interval_menu_validates_and_persists(self):
         with patch("xmu_rollcall.cli.setup_logging"):
             result = CliRunner().invoke(cli, ["config"], input="i\n0\n-2\nnan\ninf\n2.5\n")

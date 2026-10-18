@@ -362,11 +362,25 @@ def radar(account_id, rollcall_id, latitude, longitude, coordinates):
         raise click.ClickException(str(exc)) from exc
 
 
+def _switch_account(config_data, selected_id):
+    selected_account = get_account_by_id(config_data, selected_id)
+    if not selected_account:
+        tui.echo(f"{Colors.FAIL}✗ Account not found!{Colors.ENDC}")
+        sys.exit(1)
+
+    set_current_account(config_data, selected_id)
+    save_config(config_data)
+    tui.echo(f"\n{Colors.OKGREEN}✓ Switched to account: {selected_account.get('name') or selected_account.get('username')} (ID: {selected_id}){Colors.ENDC}")
+
+
 @cli.command()
-def start():
+@click.option("--id", "account_id", type=click.IntRange(min=1), help="切换到指定账号再启动，相当于先 switch")
+def start(account_id=None):
     """启动签到监控"""
     logger.info("Start command selected")
     config_data = load_config()
+    if account_id is not None:
+        _switch_account(config_data, account_id)
 
     # 检查配置是否完整
     if not is_config_complete(config_data):
@@ -435,16 +449,8 @@ def switch():
     )
 
     selected_id = int(selected_id)
-    selected_account = get_account_by_id(config_data, selected_id)
-
-    if selected_account:
-        set_current_account(config_data, selected_id)
-        save_config(config_data)
-        tui.echo(f"\n{Colors.OKGREEN}✓ Switched to account: {selected_account.get('name') or selected_account.get('username')} (ID: {selected_id}){Colors.ENDC}")
-        tui.echo(f"{Colors.GRAY}You can now run: {Colors.BOLD}xmu-rollcall start{Colors.ENDC}")
-    else:
-        tui.echo(f"{Colors.FAIL}✗ Account not found!{Colors.ENDC}")
-        sys.exit(1)
+    _switch_account(config_data, selected_id)
+    tui.echo(f"{Colors.GRAY}You can now run: {Colors.BOLD}xmu-rollcall start{Colors.ENDC}")
 
 
 if __name__ == '__main__':

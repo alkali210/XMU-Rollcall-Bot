@@ -65,6 +65,8 @@ xmu-rollcall check   # check for updates
 xmu-rollcall radar [options] [coordinates] # submit a known radar location
 ```
 
+Use `xmu-rollcall start --id 2` to switch to account ID `2` and start monitoring, just like selecting that account with `switch` and then running `start`. The selection is saved as the current account; omitting `--id` keeps using the current account.
+
 ### Submit Known Radar Coordinates
 Usage:
 ```bash

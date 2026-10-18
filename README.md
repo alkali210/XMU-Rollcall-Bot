@@ -73,6 +73,14 @@ xmu-rollcall radar [options] [coordinates] # 提交已知雷达签到坐标
 xmu-rollcall --help  # 查看帮助
 ```
 
+指定账号启动可使用 `xmu-rollcall start --id 2`，等同于先运行 `switch` 选择 ID 为 `2` 的账号，再 `start`。
+
+在交互界面中，可以随时按 `Ctrl+C` 退出或者回到主菜单。
+
+日志文件位于配置目录内的 `xmu_rollcall.log`。
+
+> 目前无法自动处理二维码和雷达签到，检测到未完成的此类签到时，监控程序将暂停 5 分钟，以防止短时间内重复请求。
+
 ### 提交已知雷达签到坐标
 
 用法：
@@ -84,12 +92,6 @@ xmu-rollcall radar --latitude <lat> --longitude <lon> [--account-id <id>] [--rol
 - `--latitude` / `--longitude`：可以省略参数名，写 `xmu-rollcall radar 24 118` 即可
 - `--account-id`：指定账号，省略时使用当前选中的账号
 - `--rollcall-id`：省略时向当前账号的活动雷达签到提交，查询不到时返回异常
-
-在交互界面中，可以随时按 `Ctrl+C` 退出或者回到主菜单。
-
-日志文件位于配置目录内的 `xmu_rollcall.log`。
-
-> 目前无法自动处理二维码和雷达签到，检测到未完成的此类签到时，监控程序将暂停 5 分钟，以防止短时间内重复请求。
 
 ## 配置
 
