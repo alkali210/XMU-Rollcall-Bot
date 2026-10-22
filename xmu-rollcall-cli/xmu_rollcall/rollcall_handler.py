@@ -104,36 +104,42 @@ def wait_for_classmates(session, rollcall_id, settings, number_code=None):
 
     target_label = f"{percentage}% of students" if percentage is not None else f"{target} classmate(s)"
     tui.update_rollcall(state="waiting", target_label=target_label, number_code=number_code)
-    print(f"Waiting for {target_label} to answer before signing...")
+    print(f"Waiting for {target_label} to answer before signing... Ctrl+P to skip waiting.")
     if number_code:
         print(f"Number code: {number_code}")
-    while True:
-        if timed_out():
-            return False
-        attendance = _fetch_attendance(session, rollcall_id)
-        if timed_out():
-            return False
-        count = attendance[0] if attendance is not None else None
-        if count is not None:
-            if percentage is not None:
-                total = attendance[1]
-                target = int((percentage * total / 100).to_integral_value(rounding=ROUND_CEILING))
-                display_target = f"{total} | Target: {percentage}% ({target} students)"
-            else:
-                display_target = target
-            tui.update_rollcall(signed=count, total=attendance[1], target=target,
-                                target_label=f"{target_label} ({target} students)" if percentage is not None else target_label)
-            print(_wait_status_line(count, display_target, number_code), end="", flush=True)
-            if count >= target:
-                print()
+    with tui.submission_shortcut() as wait:
+        while True:
+            if timed_out():
+                return False
+            attendance = _fetch_attendance(session, rollcall_id)
+            if wait(0):
+                print("\nCtrl+P to skip waiting")
                 return True
-        else:
-            tui.update_rollcall(signed=None, total=None)
-            code_text = f" | Number code: {number_code}" if number_code else ""
-            print(f"\r  Signed: unknown | Target: {target_label}, retrying...{code_text}", end="", flush=True)
+            if timed_out():
+                return False
+            count = attendance[0] if attendance is not None else None
+            if count is not None:
+                if percentage is not None:
+                    total = attendance[1]
+                    target = int((percentage * total / 100).to_integral_value(rounding=ROUND_CEILING))
+                    display_target = f"{total} | Target: {percentage}% ({target} students)"
+                else:
+                    display_target = target
+                tui.update_rollcall(signed=count, total=attendance[1], target=target,
+                                    target_label=f"{target_label} ({target} students)" if percentage is not None else target_label)
+                print(_wait_status_line(count, display_target, number_code), end="", flush=True)
+                if count >= target:
+                    print()
+                    return True
+            else:
+                tui.update_rollcall(signed=None, total=None)
+                code_text = f" | Number code: {number_code}" if number_code else ""
+                print(f"\r  Signed: unknown | Target: {target_label}, retrying...{code_text}", end="", flush=True)
 
-        sleep_seconds = min(WAIT_POLL_INTERVAL, max(0, deadline - time.monotonic()))
-        time.sleep(sleep_seconds)
+            sleep_seconds = min(WAIT_POLL_INTERVAL, max(0, deadline - time.monotonic()))
+            if wait(sleep_seconds):
+                print("\nCtrl+P to skip waiting")
+                return True
 
 def process_rollcalls(data, session, account=None):
     """处理签到数据"""

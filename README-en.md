@@ -115,4 +115,6 @@ For percentage waiting, enter `20%` in the `s` menu or set `"wait_before_answer"
 
 Each wait round lasts up to five minutes, checking attendance every five seconds. Reaching the target triggers submission; a timeout skips submission and returns to monitoring to query the current rollcall status. If the rollcall is still active, the number code is fetched again and a new wait round starts.
 
+While waiting, press **Ctrl+P** to skip the current wait and submit the fetched number code without changing your wait settings. This shortcut requires an interactive terminal; if an attendance request is in progress, submission follows when that request returns.
+
 Credentials and sessions remain in encrypted SQLite storage. Existing database settings migrate automatically on first run; JSON settings take precedence, and legacy database settings are cleared only after a successful JSON write. Exit the configuration menu before editing the file manually.

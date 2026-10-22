@@ -4,6 +4,8 @@ import click
 import time
 import builtins
 import logging
+import os
+import sys
 from colorsys import hsv_to_rgb
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -20,6 +22,64 @@ from . import __version__
 console = Console(highlight=False)
 _rollcall_view = ContextVar("rollcall_view", default=None)
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def submission_shortcut():
+    """Yield an interruptible wait; restore terminal mode on every exit path."""
+    if not sys.stdin.isatty():
+        def wait(seconds):
+            if seconds > 0:
+                time.sleep(seconds)
+            return False
+        yield wait
+        return
+
+    if os.name == "nt":
+        import msvcrt
+
+        def read_key():
+            if not msvcrt.kbhit():
+                return ""
+            char = msvcrt.getwch()
+            if char in ("\x00", "\xe0"):
+                # Consume the buffered scan code; it is not a control character.
+                msvcrt.getwch()
+                return ""
+            return char
+    else:
+        import select
+        import termios
+        import tty
+
+        fd = sys.stdin.fileno()
+        previous = termios.tcgetattr(fd)
+
+        def read_key():
+            return os.read(fd, 1).decode("latin1") if select.select([fd], [], [], 0)[0] else ""
+
+    def wait(seconds):
+        deadline = time.monotonic() + seconds
+        while True:
+            char = read_key()
+            if char:
+                if char == "\x03":
+                    raise KeyboardInterrupt
+                if char == "\x10":
+                    return True
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            time.sleep(min(0.05, remaining))
+
+    try:
+        if os.name != "nt":
+            tty.setcbreak(fd)
+        yield wait
+    finally:
+        if os.name != "nt":
+            termios.tcsetattr(fd, termios.TCSADRAIN, previous)
 
 
 class Colors:
@@ -86,7 +146,7 @@ class RollcallView:
         state = data["state"]
         title, color, detail = {
             "detected": ("New rollcall found", "cyan", "Reading rollcall details"),
-            "waiting": ("Waiting for classmates", "yellow", "Submit when the target is reached"),
+            "waiting": ("Waiting for classmates", "yellow", "Submit when the target is reached · Ctrl+P to submit now"),
             "timeout": ("Wait round ended", "yellow", "Returning to monitor to check the current rollcall status"),
             "submitting": ("Submitting answer", "cyan", "Waiting for confirmation"),
             "success": ("Rollcall answered", "green", "Answer confirmed"),
