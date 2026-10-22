@@ -1,18 +1,8 @@
 # XMU Rollcall Bot
 
-> [!note]
-> ## 2026-10-12 雷达签到失效
-> 对于不在范围内的提交不会再返回距离了，当前依赖距离计算坐标的方法失效，暂时已在 `main` 分支上移除，与 QR 签到一样按不支持处理。
->
-> 作为替代，如果已知经纬度（根据上课地点），可以尝试手动或者使用 Agent [提交已知雷达签到坐标](#提交已知雷达签到坐标)。
-> 
-> **TODO: 增加教学地点坐标列表（分校区），自动提交**
-
----
-
 [English](README-en.md) | **简体中文**
 
-> 本项目 fork 自 [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot)，并基于其 3.4.1 版本进行开发。
+> 本项目 fork 自 [KrsMt-0113/XMU-Rollcall-Bot](https://github.com/KrsMt-0113/XMU-Rollcall-Bot)
 
 厦门大学（Tronclass）自动签到程序，**仅供学习研究使用**
 
@@ -21,6 +11,7 @@
 - 实时监控签到状态，支持设置监控间隔
 - 自动完成签到：
   - 数字签到：从 API 获取数字码
+  - 雷达签到：依次尝试保存的经纬度或者手动输入
 - 支持提交签到前按比例或人数等待
 - 支持多账号，并在 SQLite 中加密存储账号信息和会话
 - 在日志文件中记录签到状态
@@ -57,14 +48,14 @@ uv sync
 
 ## 使用
 
-不带参数运行 `xmu-rollcall`，或者双击 `exe` 即可进入交互菜单，按 `Ctrl+C` 退出。
+不带参数运行 `xmu-rollcall`，或者双击 `exe` 即可进入交互菜单，按 `Ctrl+C` 退出。在初次使用时需要新建账号并输入学号密码登录，自动提交雷达签到需要先设置[雷达位置列表](#雷达位置列表)。
 
-命令行参数：
+### 命令行参数
 
 ```bash
-xmu-rollcall config  # 配置账号，支持多账号
+xmu-rollcall config  # 配置
 xmu-rollcall switch  # 切换账号
-xmu-rollcall start   # 启动监控
+xmu-rollcall start [--id <id>]  # 启动监控
 xmu-rollcall refresh # 刷新登录状态
 xmu-rollcall check   # 检查更新
 xmu-rollcall radar [options] [coordinates] # 提交已知雷达签到坐标
@@ -77,9 +68,9 @@ xmu-rollcall --help  # 查看帮助
 
 日志文件位于配置目录内的 `xmu_rollcall.log`。
 
-> 目前无法自动处理二维码和雷达签到，检测到未完成的此类签到时，监控程序将暂停 5 分钟，以防止短时间内重复请求。
+二维码签到不支持自动处理，检测到未完成的二维码签到时暂停 5 分钟。
 
-### 提交已知雷达签到坐标
+#### 提交已知雷达签到坐标
 
 用法：
 
@@ -92,10 +83,6 @@ xmu-rollcall radar --latitude <lat> --longitude <lon> [--account-id <id>] [--rol
 - `--rollcall-id`：省略时向当前账号的活动雷达签到提交，查询不到时返回异常
 
 ## 配置
-
-可以直接在 TUI 中配置，在初次使用时需要新建账号并输入学号密码登录。
-
-配置目录优先使用环境变量 `XMU_ROLLCALL_CONFIG_DIR`，否则使用 `~/.xmu_rollcall`；用户目录不可写时使用当前目录下的 `.xmu_rollcall`。
 
 配置文件示例：
 
@@ -121,7 +108,7 @@ xmu-rollcall radar --latitude <lat> --longitude <lon> [--account-id <id>] [--rol
 }
 ```
 
-> 如果直接编辑此文件，会在下次启动时生效。
+如果直接编辑此文件，会在下次启动时生效。
 
 ### 监控间隔
 
@@ -137,6 +124,19 @@ xmu-rollcall radar --latitude <lat> --longitude <lon> [--account-id <id>] [--rol
 
 在配置菜单中按 `s`，设置提交签到前的等待，正整数表示提交前等待的已签到人数，百分比表示提交前等待的人数比例，`false` 表示不等待，默认值为 `10%`。
 
-每轮最多等待 5 分钟，每 5 秒查询一次已签到人数。超时返回监控重新查询签到状态。如果签到仍然活动，会重新获取数字码并开始下一轮等待。
+每轮最多等待 5 分钟，每 5 秒查询一次已签到人数。超时返回监控重新查询签到状态。如果签到仍然活动再开始下一轮等待。
 
-等待期间可按 **Ctrl+P** 跳过等待，直接提交数字码。
+等待期间可按 **Ctrl+P** 跳过等待，直接尝试提交。
+
+### 雷达位置列表
+
+运行 `xmu-rollcall config`，按 `l` 进入位置设置，可以添加经纬度和备注。
+
+位置保存于配置目录的 `radar_locations.jsonl`:
+
+```json
+{"latitude":24.1234,"longitude":118.1234,"remark":"教学楼 A"}
+{"latitude":24.5678,"longitude":118.5678,"remark":"教学楼 B"}
+```
+
+每次处理雷达签到会重新读取列表依次尝试，全部失败再提示手动处理。雷达签到和数字签到共用等待设置。

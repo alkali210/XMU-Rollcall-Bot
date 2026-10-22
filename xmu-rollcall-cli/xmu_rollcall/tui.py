@@ -149,6 +149,7 @@ class RollcallView:
             "waiting": ("Waiting for classmates", "yellow", "Submit when the target is reached · Ctrl+P to submit now"),
             "timeout": ("Wait round ended", "yellow", "Returning to monitor to check the current rollcall status"),
             "submitting": ("Submitting answer", "cyan", "Waiting for confirmation"),
+            "coordinates": ("Enter radar coordinates", "yellow", "Saved locations exhausted · waiting for latitude and longitude"),
             "success": ("Rollcall answered", "green", "Answer confirmed"),
             "failed": ("Answering failed", "red", "No confirmation received · see log for details"),
             "already": ("Already answered", "green", "No submission needed"),
@@ -160,6 +161,8 @@ class RollcallView:
             ("Created by", f"{rollcall['department_name']} · {rollcall['created_by_name']}"),
             ("Type", f"{kind} rollcall"),
         ]), Text("")]
+        if data.get("location"):
+            content.extend([Text(f"Location: {data['location']}", style="cyan"), Text("")])
         if data["number_code"] is not None:
             content.extend([Text.assemble(("Number code   ", "dim"),
                                           (str(data["number_code"]), "bold yellow")), Text("")])
@@ -180,7 +183,7 @@ class RollcallView:
         steps = Text()
         labels = ["Detected", "Waiting", "Submitting", "Confirmed"]
         active = {"detected": 0, "waiting": 1, "submitting": 2}.get(state, 3)
-        if state in {"already", "unsupported", "interrupted", "timeout"}:
+        if state in {"already", "unsupported", "interrupted", "timeout", "coordinates"}:
             labels, active = ["Detected", title], 1
         elif state == "failed":
             labels[-1] = "Failed"
@@ -250,9 +253,16 @@ def echo(message=""):
 
 
 def prompt(message, **kwargs):
-    console.rule(style="blue")
-    console.print(Text.assemble(("❯ ", "bold green"), Text.from_ansi(message)), end=" ")
-    return click.prompt("", prompt_suffix="› ", **kwargs)
+    view = _rollcall_view.get()
+    if view is not None:
+        view.live.stop()
+    try:
+        console.rule(style="blue")
+        console.print(Text.assemble(("❯ ", "bold green"), Text.from_ansi(message)), end=" ")
+        return click.prompt("", prompt_suffix="› ", **kwargs)
+    finally:
+        if view is not None:
+            view.live.start(refresh=True)
 
 
 def accounts_panel(accounts, current, settings):

@@ -15,13 +15,14 @@ from .config import (
     add_account, get_all_accounts, get_current_account, set_current_account,
     get_account_by_id, CONFIG_FILE, delete_account,
     delete_saved_session, get_rollcall_settings, set_rollcall_settings, get_interval,
-    get_disable_monitor_retry
+    get_disable_monitor_retry, load_radar_locations, save_radar_locations
 )
 from .logging_config import setup_logging
 from .monitor import start_monitor
 from . import __version__
 from .updates import check_updates
 from .tui import Colors
+from .radar import parse_coordinates
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +248,54 @@ def config():
         value = str(get_disable_monitor_retry(current_config)).lower()
         tui.echo(f"Disable monitor retries: {value} (saved for all accounts; applies on next start).")
 
+    def manage_radar_locations():
+        try:
+            locations = load_radar_locations()
+        except RuntimeError as exc:
+            tui.echo(f"{Colors.FAIL}{exc}{Colors.ENDC}")
+            return
+        while True:
+            tui.echo("\nRadar locations (shared by all accounts; tried in listed order):")
+            if not locations:
+                tui.echo("No radar locations saved.")
+            for index, location in enumerate(locations, start=1):
+                tui.echo(
+                    f"  {index}. Latitude: {location['latitude']}, "
+                    f"longitude: {location['longitude']} — {location['remark']}"
+                )
+            tui.console.print(tui.panel(tui.menu_rows([
+                ("a", "Add location"), ("d", "Delete location"),
+            ]), "Radar locations · Ctrl+C to return", "blue"))
+            action = tui.prompt(
+                "Action", type=click.Choice(["a", "d"], case_sensitive=False),
+            ).lower()
+            if action == "a":
+                coordinates = tui.prompt("Latitude longitude (space or comma separated)")
+                try:
+                    latitude, longitude = parse_coordinates(coordinates)
+                except ValueError as exc:
+                    tui.echo(f"{Colors.FAIL}Invalid coordinates: {exc}{Colors.ENDC}")
+                    continue
+                remark = tui.prompt("Remark", default="", show_default=False)
+                updated = locations + [{
+                    "latitude": latitude, "longitude": longitude, "remark": remark,
+                }]
+            else:
+                if not locations:
+                    tui.echo("No radar locations to delete.")
+                    continue
+                selected = int(tui.prompt(
+                    "Location number to delete", type=click.IntRange(1, len(locations)),
+                )) - 1
+                updated = locations[:selected] + locations[selected + 1:]
+            try:
+                save_radar_locations(updated)
+            except RuntimeError as exc:
+                tui.echo(f"{Colors.FAIL}{exc}{Colors.ENDC}")
+                continue
+            locations = updated
+            tui.echo(f"{Colors.OKGREEN}Radar locations saved.{Colors.ENDC}")
+
     try:
         while True:
             tui.console.print(tui.frame(tui.Group(tui.sections(
@@ -256,14 +305,15 @@ def config():
                     ("n", "Add new account"), ("d", "Delete account"),
                     ("s", "Edit rollcall settings"),
                     ("i", f"Polling interval: {get_interval(current_config):g}s (all accounts)"),
-                    ("r", f"Disable monitor retries: {str(get_disable_monitor_retry(current_config)).lower()} (all accounts)")]),
+                    ("r", f"Disable monitor retries: {str(get_disable_monitor_retry(current_config)).lower()} (all accounts)"),
+                    ("l", "Manage radar locations (all accounts)")]),
                     "Actions", "blue")),
                 tui.Text(f"Configuration file: {CONFIG_FILE.resolve()}", style="dim")),
                 "Configuration", subtitle="Ctrl+C to return"))
 
             action = tui.prompt(
                 f"{Colors.BOLD}Action{Colors.ENDC}",
-                type=click.Choice(['n', 'd', 's', 'i', 'r'], case_sensitive=False),
+                type=click.Choice(['n', 'd', 's', 'i', 'r', 'l'], case_sensitive=False),
             )
 
             if action.lower() == 'n':
@@ -276,6 +326,8 @@ def config():
                 edit_interval()
             elif action.lower() == 'r':
                 edit_monitor_retry()
+            elif action.lower() == 'l':
+                manage_radar_locations()
     except (click.Abort, KeyboardInterrupt):
         tui.echo("Configuration closed.")
         return

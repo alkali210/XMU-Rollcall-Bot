@@ -9,6 +9,7 @@ from rich.console import Console
 from urllib3.exceptions import MaxRetryError, SSLError as UrllibSSLError
 
 from xmu_rollcall import monitor, network, utils, verify, rollcall_handler
+from xmu_rollcall import config
 
 
 def response(data=None, status=200):
@@ -94,6 +95,35 @@ class NetworkTests(unittest.TestCase):
         if terminal_output is None:
             live.stop.assert_called()
         return stopped.exception.code, sleeps, session, handler, output.getvalue()
+
+    def test_radar_failure_refreshes_authoritative_state_without_prompting(self):
+        pending = dict(course_title="Radar", created_by_name="Teacher", department_name="School",
+                       is_expired=False, is_number=False, is_radar=True, rollcall_id=42,
+                       rollcall_status="absent", scored=False, status="absent")
+        signed = {**pending, "status": "on_call_fine", "rollcall_status": "on_call_fine"}
+        for failure in (requests.Timeout("offline"), response(status=429), response(status=503)):
+            for disabled in (False, True):
+                with self.subTest(failure=failure, disabled=disabled):
+                    def process(data, session, account):
+                        session.put.side_effect = [failure]
+                        return rollcall_handler.process_rollcalls(data, session, {
+                            **account, "rollcall_settings": {"wait_before_answer": False},
+                        })
+
+                    with patch.object(config, "load_radar_locations", return_value=[
+                        {"latitude": 24, "longitude": 118, "remark": "classroom"},
+                        {"latitude": 25, "longitude": 118, "remark": "other classroom"},
+                    ]), patch.object(monitor.tui, "prompt") as prompt:
+                        code, sleeps, session, _, _ = self.run_monitor(
+                            [response({"rollcalls": [pending]}),
+                             response({"rollcalls": [signed]}), KeyboardInterrupt()],
+                            process=process, disable_retry=disabled,
+                        )
+                    self.assertEqual(code, 1 if disabled else 0)
+                    self.assertEqual(session.get.call_count, 1 if disabled else 3)
+                    self.assertEqual([s for s in sleeps if s >= 5], [] if disabled else [5])
+                    session.put.assert_called_once()
+                    prompt.assert_not_called()
 
     def test_disconnect_backoff_cap_recovery_and_reset(self):
         code, sleeps, session, _, output = self.run_monitor(

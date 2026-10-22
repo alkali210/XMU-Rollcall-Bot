@@ -1,5 +1,6 @@
 import io
 import unittest
+from contextlib import nullcontext
 from unittest.mock import Mock, patch
 
 import requests
@@ -7,6 +8,7 @@ from rich.cells import cell_len
 from rich.console import Console
 
 from xmu_rollcall import rollcall_handler as handler, tui, verify
+from xmu_rollcall import config
 
 
 def rollcall(**changes):
@@ -59,33 +61,91 @@ class RollcallActivityTests(unittest.TestCase):
         session = Mock()
         with tui.rollcall_activity("同学", "1m", 12, 10) as view, patch.object(
             handler, "get_rollcall_settings", return_value={"wait_before_answer": False}
-        ), patch.object(handler, "wait_for_classmates") as wait, patch.object(
+        ), patch.object(
             handler.time, "sleep"
-        ) as sleep:
+        ) as sleep, patch.object(handler, "answer_radar", return_value=True):
             result = handler.process_rollcalls({"rollcalls": calls}, session)
             self.assertEqual(view.data["state"], "unsupported")
             self.assertEqual(len(view.results), 2)
             self.assertIn("already", view.results[0].plain)
-            self.assertIn("unsupported", view.results[1].plain)
+            self.assertIn("success", view.results[1].plain)
             self.assertIsNone(view.data["number_code"])
         session.get.assert_not_called()
         session.put.assert_not_called()
-        wait.assert_not_called()
-        self.assertEqual(sleep.call_args_list, [unittest.mock.call(300), unittest.mock.call(300)])
+        self.assertEqual(sleep.call_args_list, [unittest.mock.call(300)])
         self.assertEqual(result, {"rollcalls": []})
 
-    def test_unsupported_rollcalls_keep_their_actual_type(self):
-        for is_radar, wrong_type in ((True, "QRcode"), (False, "Radar")):
-            with self.subTest(is_radar=is_radar):
-                self.output.seek(0)
-                self.output.truncate()
-                with tui.rollcall_activity("同学", "1m", 12, 10), patch.object(
-                    handler.time, "sleep"
+    def test_radar_waits_once_before_list_and_manual_submissions(self):
+        for wait_setting in (3, "30%"):
+            with self.subTest(wait_setting=wait_setting):
+                events = []
+                session = Mock()
+
+                def attendance(*args, **kwargs):
+                    signed = len(events) + 1
+                    events.append(f"attendance:{signed}")
+                    return Mock(status_code=200, json=lambda: {"student_rollcalls": [
+                        {"rollcall_status": "on_call_fine" if n < signed else "absent"}
+                        for n in range(10)
+                    ]})
+
+                def submit(*args, **kwargs):
+                    events.append(f"submit:{kwargs['json']['latitude']}")
+                    return Mock(status_code=200 if kwargs["json"]["latitude"] == 26 else 400)
+
+                session.get.side_effect = attendance
+                session.put.side_effect = submit
+                locations = [{"latitude": n, "longitude": 118, "remark": ""} for n in (24, 25)]
+                with tui.rollcall_activity("同学", "1m", 12, 10) as view, patch.object(
+                    config, "load_radar_locations", return_value=locations
+                ), patch.object(tui, "submission_shortcut", return_value=nullcontext(lambda seconds: False)), patch.object(
+                    tui, "prompt", return_value="26 118"
                 ):
-                    handler.process_rollcalls(
-                        {"rollcalls": [rollcall(is_radar=is_radar, is_number=False)]}, Mock()
+                    result = handler.process_rollcalls(
+                        {"rollcalls": [rollcall(is_radar=True, is_number=False)]}, session,
+                        {"rollcall_settings": {"wait_before_answer": wait_setting}},
                     )
-                self.assertNotIn(wrong_type, self.output.getvalue())
+                    self.assertEqual(view.data["state"], "success")
+                    self.assertIsNone(view.data["number_code"])
+                self.assertEqual(events, ["attendance:1", "attendance:2", "attendance:3",
+                                          "submit:24", "submit:25", "submit:26.0"])
+                self.assertEqual(len(result["rollcalls"]), 1)
+
+    def test_radar_wait_timeout_does_not_submit_or_prompt(self):
+        session = Mock()
+        with tui.rollcall_activity("同学", "1m", 12, 10) as view, patch.object(
+            handler, "WAIT_TIMEOUT", 0
+        ), patch.object(tui, "prompt") as prompt:
+            result = handler.process_rollcalls(
+                {"rollcalls": [rollcall(is_radar=True)]}, session,
+                {"rollcall_settings": {"wait_before_answer": 3}},
+            )
+            self.assertEqual(view.data["state"], "timeout")
+        self.assertEqual(result, {"rollcalls": []})
+        session.put.assert_not_called()
+        prompt.assert_not_called()
+
+    def test_radar_skip_wait_and_disabled_wait_submit_without_threshold(self):
+        for wait_setting in (False, 3):
+            with self.subTest(wait_setting=wait_setting):
+                session = Mock()
+                session.get.return_value.status_code = 200
+                session.get.return_value.json.return_value = {"student_rollcalls": [
+                    {"rollcall_status": "absent"} for _ in range(10)
+                ]}
+                session.put.return_value.status_code = 200
+                with tui.rollcall_activity("同学", "1m", 12, 10) as view, patch.object(
+                    config, "load_radar_locations",
+                    return_value=[{"latitude": 24, "longitude": 118, "remark": ""}],
+                ), patch.object(tui, "submission_shortcut", return_value=nullcontext(lambda seconds: True)):
+                    handler.process_rollcalls(
+                        {"rollcalls": [rollcall(is_radar=True)]}, session,
+                        {"rollcall_settings": {"wait_before_answer": wait_setting}},
+                    )
+                    self.assertEqual(view.data["state"], "success")
+                session.put.assert_called_once()
+                self.assertEqual(session.get.call_count, 0 if wait_setting is False else 1)
+
 
     def test_error_and_interrupt_restore_output_and_propagate(self):
         for error, state in [(requests.Timeout("offline"), "failed"),

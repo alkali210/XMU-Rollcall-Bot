@@ -1,6 +1,7 @@
 import os
 import json
 import math
+import logging
 from pathlib import Path
 from . import secure_store
 
@@ -140,6 +141,66 @@ def ensure_config_dir():
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     except (OSError, PermissionError) as e:
         raise RuntimeError(f"无法创建配置目录 {CONFIG_DIR}: {e}\n提示：可以设置环境变量 XMU_ROLLCALL_CONFIG_DIR 指定配置目录位置")
+
+
+def _validate_radar_locations(locations):
+    if not isinstance(locations, list):
+        raise ValueError("Radar locations must be a JSON list.")
+    validated = []
+    for index, location in enumerate(locations, start=1):
+        if not isinstance(location, dict):
+            raise ValueError(f"Radar location {index} must be an object.")
+        coordinates = {}
+        for field, bound in (("latitude", 90), ("longitude", 180)):
+            value = location.get(field)
+            if (isinstance(value, bool) or not isinstance(value, (int, float))
+                    or not -bound <= value <= bound or not math.isfinite(value)):
+                raise ValueError(
+                    f"Radar location {index}: {field} must be a finite number in [-{bound}, {bound}]."
+                )
+            coordinates[field] = float(value)
+        remark = location.get("remark")
+        if not isinstance(remark, str):
+            raise ValueError(f"Radar location {index}: remark must be a string.")
+        validated.append({**coordinates, "remark": remark})
+    return validated
+
+
+def load_radar_locations() -> list[dict]:
+    """Load valid JSONL rows in order, skipping malformed locations."""
+    path = CONFIG_DIR / "radar_locations.jsonl"
+    locations = []
+    try:
+        with open(path, "rb") as f:
+            for line_number, line in enumerate(f, start=1):
+                if not line.strip():
+                    continue
+                try:
+                    locations.extend(_validate_radar_locations([json.loads(line.decode("utf-8"))]))
+                except (ValueError, UnicodeError) as exc:
+                    logging.getLogger(__name__).warning(
+                        "Skipping invalid radar location in %s, line %s: %s", path, line_number, exc
+                    )
+        return locations
+    except FileNotFoundError:
+        return []
+    except (OSError, ValueError) as exc:
+        raise RuntimeError(f"Cannot read radar locations {path}: {exc}") from exc
+
+
+def save_radar_locations(locations):
+    """Validate and atomically save the shared radar locations."""
+    path = CONFIG_DIR / "radar_locations.jsonl"
+    try:
+        validated = _validate_radar_locations(locations)
+        ensure_config_dir()
+        temporary = path.with_suffix(".jsonl.tmp")
+        with open(temporary, "w", encoding="utf-8") as f:
+            for location in validated:
+                f.write(json.dumps(location, ensure_ascii=False, allow_nan=False) + "\n")
+        os.replace(temporary, path)
+    except (OSError, ValueError) as exc:
+        raise RuntimeError(f"Cannot save radar locations {path}: {exc}") from exc
 
 def load_config():
     """加载配置文件"""

@@ -5,6 +5,7 @@ from .network import is_retryable
 from decimal import Decimal, ROUND_CEILING
 from .verify import send_code
 from .config import get_rollcall_settings, normalize_rollcall_settings
+from .radar import answer_radar
 
 logger = logging.getLogger(__name__)
 WAIT_POLL_INTERVAL = 5
@@ -212,6 +213,12 @@ def handle_rollcalls(data, session, account=None):
                     print("Answering failed.")
                 tui.update_rollcall(state="timeout" if wait_timed_out else
                                     "success" if answer_status[i] else "failed")
+            elif rollcalls[i]['status'] == 'absent' and rollcalls[i]['is_radar'] and not rollcalls[i]['is_expired']:
+                if wait_for_classmates(session, rollcalls[i]['rollcall_id'], settings):
+                    answer_status[i] = answer_radar(session, rollcalls[i]['rollcall_id'])
+                    tui.update_rollcall(state="success" if answer_status[i] else "failed")
+                else:
+                    tui.update_rollcall(state="timeout")
             elif rollcalls[i]['status'] == 'on_call_fine':
                 print("Already answered.")
                 answer_status[i] = True
