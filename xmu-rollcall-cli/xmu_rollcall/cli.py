@@ -77,7 +77,7 @@ def check():
         info = check_updates(__version__)
     except RuntimeError as exc:
         raise click.ClickException(str(exc)) from exc
-    tui.echo(f"Current version: {__version__} ({info.current_commit})")
+    tui.echo(f"Current release version: {__version__} ({info.current_commit})")
     tui.echo(f"{info.commits_since_release} commits to main since this release")
     if info.update_available:
         tui.echo(f"{Colors.OKGREEN}Update available!{Colors.ENDC}")

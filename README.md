@@ -1,6 +1,6 @@
 # XMU Rollcall Bot
 
-> [!warning]
+> [!note]
 > ## 2026-10-12 雷达签到失效
 > 对于不在范围内的提交不会再返回距离了，当前依赖距离计算坐标的方法失效，暂时已在 `main` 分支上移除，与 QR 签到一样按不支持处理。
 >
@@ -48,8 +48,6 @@ pip install "git+https://github.com/alkali210/XMU-Rollcall-Bot.git#subdirectory=
 无需安装 Python；Windows 可双击运行，Linux/macOS 下载后先执行 `chmod +x <filename>`，再运行。
 
 ### 从源码安装
-
-clone 本仓库并进入 `xmu-rollcall-cli/`：
 
 ```bash
 git clone --depth 1 https://github.com/alkali210/XMU-Rollcall-Bot.git
